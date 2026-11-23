@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>學術論文自動化知識庫與簡報系統 | AI Knowledge & Presentation Wiki</title>
+  <meta name="description" content="基於 AGENTS.md 規則驅動的學術論文知識編譯與自動簡報生成系統">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <style>
+    :root {
+      --bg-canvas: #F8FAFC;
+      --bg-card: #FFFFFF;
+      --border-color: #E2E8F0;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+      --brand-primary: #0284C7;
+      --brand-teal: #0D9488;
+      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --font-serif: "Charter", "Georgia", "Cambria", serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "JetBrains Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      padding: 0;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navbar */
+    header {
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .nav-inner {
+      height: 68px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo {
+      font-family: var(--font-serif);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-badge {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: #E0F2FE;
+      color: var(--brand-primary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .nav-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+    }
+    .nav-links a {
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover {
+      color: var(--brand-primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 64px 0 48px 0;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-block;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--brand-primary);
+      background: #F0F9FF;
+      border: 1px solid #BAE6FD;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 18px;
+      letter-spacing: 0.05em;
+    }
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: 2.8rem;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1.2;
+      margin-bottom: 18px;
+    }
+    .hero p {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto 28px auto;
+    }
+
+    /* Principles Grid */
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 56px;
+    }
+    .p-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: var(--card-shadow);
+    }
+    .p-icon {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+    }
+    .p-title {
+      font-family: var(--font-serif);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+    .p-desc {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Section Titles */
+    .section-head {
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid var(--text-main);
+      padding-bottom: 8px;
+    }
+    .section-title {
+      font-family: var(--font-serif);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .section-sub {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    /* Presentation Showcases */
+    .deck-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 24px;
+      margin-bottom: 64px;
+    }
+    .deck-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      transition: all 0.25s;
+    }
+    .deck-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px -6px rgba(15, 23, 42, 0.08);
+      border-color: var(--brand-primary);
+    }
+    .deck-preview {
+      background: #F1F5F9;
+      height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding: 24px;
+      text-align: center;
+      position: relative;
+    }
+    .deck-preview-tag {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: #E0F2FE;
+      color: var(--brand-primary);
+      padding: 3px 10px;
+      border-radius: 12px;
+    }
+    .deck-preview h3 {
+      font-family: var(--font-serif);
+      font-size: 1.35rem;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+    .deck-preview span {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .deck-body {
+      padding: 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .deck-desc {
+      font-size: 0.95rem;
+      color: #334155;
+      line-height: 1.6;
+    }
+    .deck-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .deck-meta-tag {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: #F8FAFC;
+      border: 1px solid #CBD5E1;
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+    .deck-btn {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      background: var(--brand-primary);
+      color: #FFFFFF;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 10px 20px;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+    .deck-btn:hover {
+      background: #0369A1;
+    }
+
+    /* Workflow Pipeline Showcase */
+    .pipeline-section {
+      background: #FFFFFF;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 36px;
+      margin-bottom: 64px;
+      box-shadow: var(--card-shadow);
+    }
+    .pipeline-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 24px;
+      position: relative;
+    }
+    .step-box {
+      background: #F8FAFC;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .step-num {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--brand-primary);
+      margin-bottom: 6px;
+    }
+    .step-title {
+      font-family: var(--font-serif);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+    .step-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* AGENTS.md Code Block */
+    .rule-box {
+      background: #0F172A;
+      color: #F8FAFC;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 64px;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      overflow-x: auto;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      background: #FFFFFF;
+      padding: 36px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.2rem; }
+      .pipeline-grid { grid-template-columns: 1fr; }
+      .deck-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header>
+    <div class="container nav-inner">
+      <a href="#" class="logo">
+        <span>Academic Wiki & Slides</span>
+        <span class="logo-badge">AGENTS.md Driven</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#presentations">簡報展示</a></li>
+        <li><a href="#pipeline">運作流程</a></li>
+        <li><a href="#rules">AGENTS.md 規則</a></li>
+        <li><a href="wiki/_index.md">知識庫索引</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero container">
+    <span class="hero-badge">RULES OVER SINGLE PAGES • 規則驅動而非單次生成</span>
+    <h1>學術論文自動化知識庫與簡報系統</h1>
+    <p>
+      不只是做出一張靜態網頁，而是建立一套嚴格的 <strong>AGENTS.md</strong> 治理體系。讓 AI 隨時依照標準化的輸入、編譯、筆記、投影片與自包含 HTML 簡報流程，穩定擴充高品質的學術知識。
+    </p>
+  </section>
+
+  <!-- Three Core Principles -->
+  <section class="container principles">
+    <div class="p-card">
+      <div class="p-icon">📐</div>
+      <h3 class="p-title">寫入時編譯 (Compile at Write-Time)</h3>
+      <p class="p-desc">告別傳統 RAG 盲目檢索碎片。將 PDF 論文與技術報告轉為活體 Markdown 詞條，持續沉澱為高度互聯的維基知識網絡。</p>
+    </div>
+    <div class="p-card">
+      <div class="p-icon">🔒</div>
+      <h3 class="p-title">封閉世界假設 (Strict Grounding)</h3>
+      <p class="p-desc">生成的筆記與簡報正文，100% 嚴格源自庫內已驗證知識。未知外部文獻自動標註於文末提供一鍵下載，形成知識擴充飛輪。</p>
+    </div>
+    <div class="p-card">
+      <div class="p-icon">🏛️</div>
+      <h3 class="p-title">簡約優雅學術白底風 (Academic White)</h3>
+      <p class="p-desc">零外部依賴的單一自包含 HTML 簡報，原生整合 KaTeX 數學公式排版、全螢幕演說模式與講者備忘稿。</p>
+    </div>
+  </section>
+
+  <!-- Presentations Showcase -->
+  <section id="presentations" class="container">
+    <div class="section-head">
+      <h2 class="section-title">精選簡報成果展示 (Interactive Slides)</h2>
+      <span class="section-sub">點擊即可全螢幕體驗學術簡報，支援鍵盤方向鍵與 P 鍵講稿</span>
+    </div>
+
+    <div class="deck-grid">
+      <!-- Flagship Tutorial Deck: AI Penetration Testing (Based on Raiju & 4 core papers) -->
+      <div class="deck-card" style="border: 2px solid #0D9488;">
+        <div class="deck-preview" style="background: #F0FDFA;">
+          <span class="deck-preview-tag" style="background: #0D9488; color: #FFFFFF;">🌟 TOPIC FLAGSHIP • 5 篇核心文獻教學</span>
+          <h3>AI 也能當駭客？</h3>
+          <span>自動化滲透測試與強化學習智能體的攻防進化史</span>
+        </div>
+        <div class="deck-body">
+          <p class="deck-desc">
+            <strong>以庫內種子論文 <code>Raiju.pdf</code> 為核心，整合 5 篇頂級文獻</strong>（Raiju、PentestGPT、CyberBattleSim、DeepExploit、POMDP）。透過城堡、神偷與戰爭迷霧等直觀比喻，揭密 AI 如何在未知網路中自主決策、提權與奪旗。
+          </p>
+          <div class="deck-meta">
+            <span class="deck-meta-tag">Raiju (A2C >84%)</span>
+            <span class="deck-meta-tag">PentestGPT (+228%)</span>
+            <span class="deck-meta-tag">CyberBattleSim (MS)</span>
+            <span class="deck-meta-tag">POMDP Belief State</span>
+            <span class="deck-meta-tag">DeepExploit (A3C)</span>
+          </div>
+          <a href="presentations/2026-11-24_ai-penetration-testing-tutorial.html" class="deck-btn" style="background: #0D9488;" target="_blank">
+            <span>🖥️ 開啟 AI 駭客教學簡報 (8 頁全螢幕，按 P 開講稿)</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Flagship Tutorial Deck: How LLMs Learn to Think -->
+      <div class="deck-card" style="border: 2px solid var(--brand-primary);">
+        <div class="deck-preview" style="background: #F0F9FF;">
+          <span class="deck-preview-tag" style="background: #0284C7; color: #FFFFFF;">🌟 FLAGSHIP TUTORIAL • 通識教學</span>
+          <h3>大語言模型如何學會思考？</h3>
+          <span>從「機率接話大師」到「自主邏輯推理」的進化之路</span>
+        </div>
+        <div class="deck-body">
+          <p class="deck-desc">
+            <strong>專門為初學者打造的教學型 HTML 簡報</strong>。利用生活化比喻解構快思與慢想（System 1 vs 2），循序揭密思維鏈草稿紙（CoT）、自我一致性集體表決（Self-Consistency）與純強化學習自發湧現反思（GRPO），文末附延伸前沿論文一鍵下載。
+          </p>
+          <div class="deck-meta">
+            <span class="deck-meta-tag">System 1 vs 2</span>
+            <span class="deck-meta-tag">CoT Scratchpad</span>
+            <span class="deck-meta-tag">Self-Consistency</span>
+            <span class="deck-meta-tag">DeepSeek-R1 GRPO</span>
+            <span class="deck-meta-tag">KaTeX + 講者備忘稿</span>
+          </div>
+          <a href="presentations/2026-11-24_llm-reasoning-tutorial.html" class="deck-btn" target="_blank">
+            <span>🖥️ 開啟教學型互動簡報 (8 頁全螢幕，按 P 開講稿)</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Deck 1: Raiju Paper (From uploaded PDF) -->
+      <div class="deck-card">
+        <div class="deck-preview">
+          <span class="deck-preview-tag">NEW • FROM DATA/PAPERS/RAIJU.PDF</span>
+          <h3>Raiju: RL 後滲透自動化安全評估</h3>
+          <span>發表於 Computer Networks 253 (2024)</span>
+        </div>
+        <div class="deck-body">
+          <p class="deck-desc">
+            針對論文 <code>Raiju.pdf</code> 進行完整知識編譯。探討如何利用 Advantage Actor-Critic (A2C) 結合 Metasploit 99 個 Exploit 模組，在 Windows 與 Linux 跨平台環境下達成超過 84% 成功率的自動化提權與橫向移動。
+          </p>
+          <div class="deck-meta">
+            <span class="deck-meta-tag">A2C vs PPO</span>
+            <span class="deck-meta-tag">Metasploit 99 Exploits</span>
+            <span class="deck-meta-tag">RW20 Reward</span>
+            <span class="deck-meta-tag">LaTeX Formulas</span>
+          </div>
+          <a href="presentations/2026-11-16_raiju-post-exploitation.html" class="deck-btn" target="_blank">
+            <span>🖥️ 開啟 Raiju 互動簡報 (8 頁全螢幕)</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Deck 2: DeepSeek-R1 Paper -->
+      <div class="deck-card">
+        <div class="deck-preview">
+          <span class="deck-preview-tag">AI RESEARCH FLAGSHIP</span>
+          <h3>DeepSeek-R1 推理機制與演算法演進</h3>
+          <span>大語言模型純強化學習與測試期計算量</span>
+        </div>
+        <div class="deck-body">
+          <p class="deck-desc">
+            解構 DeepSeek-R1-Zero 的純 RL 湧現反思機制、GRPO 拔除 Critic 網絡的數學推導、MLA 注意力低秩壓縮與 KV Cache 記憶體優化，以及 AIME 79.8% 的蒸餾突破。
+          </p>
+          <div class="deck-meta">
+            <span class="deck-meta-tag">GRPO Math</span>
+            <span class="deck-meta-tag">Test-Time Compute</span>
+            <span class="deck-meta-tag">MLA KV Cache</span>
+            <span class="deck-meta-tag">AIME 2024</span>
+          </div>
+          <a href="presentations/2026-11-16_deepseek-r1-reasoning.html" class="deck-btn" target="_blank">
+            <span>🖥️ 開啟 DeepSeek-R1 互動簡報</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Deck 3: LLM in Education Issues -->
+      <div class="deck-card">
+        <div class="deck-preview">
+          <span class="deck-preview-tag">NEW • TOPIC PRESENTATION</span>
+          <h3>LLM 在教學上的運用問題與技術挑戰</h3>
+          <span>基於庫內 Wiki 嚴格推導之學術簡報</span>
+        </div>
+        <div class="deck-body">
+          <p class="deck-desc">
+            嚴格基於庫內 <code>DeepSeek-R1</code>、<code>Math Reasoning Benchmarks</code> 與 <code>Test-Time Compute</code> 等詞條。深入剖析直接解題衝突、Pass@1 誤差傳播、Reasoning Tax 延遲心流中斷與軟性學科缺乏客觀驗證器等四大核心瓶頸，文末附可一鍵下載之待收錄教育論文。
+          </p>
+          <div class="deck-meta">
+            <span class="deck-meta-tag">Pass@1 Reliability</span>
+            <span class="deck-meta-tag">Reasoning Tax</span>
+            <span class="deck-meta-tag">Socratic Scaffolding</span>
+            <span class="deck-meta-tag">LaTeX & Direct Downloads</span>
+          </div>
+          <a href="presentations/2026-11-24_llm-in-education-issues.html" class="deck-btn" target="_blank">
+            <span>🖥️ 開啟 LLM 教學問題互動簡報 (8 頁全螢幕)</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pipeline Section -->
+  <section id="pipeline" class="container">
+    <div class="pipeline-section">
+      <div class="section-head" style="margin-bottom: 0;">
+        <h2 class="section-title">標準化生產線 (Pipeline)</h2>
+        <span class="section-sub">如何讓 AI 重複擴充新的學術頁面與簡報？</span>
+      </div>
+
+      <div class="pipeline-grid">
+        <div class="step-box">
+          <div class="step-num">STAGE 01</div>
+          <h4 class="step-title">文獻匯入 (Ingest)</h4>
+          <p class="step-text">將新論文 PDF 或筆記放入 <code>data/papers/</code>，執行 <code>ingest.ps1</code> 標準化轉為帶有 YAML 的 raw entries。</p>
+        </div>
+        <div class="step-box">
+          <div class="step-num">STAGE 02</div>
+          <h4 class="step-title">知識吸收 (Absorb)</h4>
+          <p class="step-text">AI 研讀 raw entry，提煉架構機理與實驗數據，橫向織入 <code>wiki/</code> 互聯詞條，自動重建 <code>_index.md</code>。</p>
+        </div>
+        <div class="step-box">
+          <div class="step-num">STAGE 03</div>
+          <h4 class="step-title">閉環研究 (Notes)</h4>
+          <p class="step-text">AI 嚴格僅依 Wiki 庫內事實撰寫 <code>notes/*.md</code>，支援 LaTeX 公式，外部檢索文獻附於文末提供下載。</p>
+        </div>
+        <div class="step-box">
+          <div class="step-num">STAGE 04</div>
+          <h4 class="step-title">簡報生成 (Slides & HTML)</h4>
+          <p class="step-text">將 Note 壓縮為 8 頁逐頁結構，輸出零依賴的學術白底 HTML 簡報，立即發布至 GitHub Pages。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Rules Section -->
+  <section id="rules" class="container">
+    <div class="section-head">
+      <h2 class="section-title">AGENTS.md 治理手冊摘要</h2>
+      <span class="section-sub">為專案建立的不可變行為綱領</span>
+    </div>
+
+    <div class="rule-box">
+<pre><code># AGENTS.md 核心原則節錄
+1. 嚴格事實閉環 (Strict Grounding):
+   - 研究筆記與簡報正文僅能引用 wiki/ 目錄中既有的知識詞條。
+   - 所有論點需標註 [[Wiki 詞條連結]]。若知識庫未收錄，正文標明未知，絕不自行腦補。
+
+2. 建議文獻回流機制 (Knowledge Flywheel):
+   - 外部搜尋到的參考資料，一律放至文末「建議參考文獻」，附帶直連下載 PDF 連結。
+   - 提供下一次 /wiki ingest 擴充來源。
+
+3. 簡約優雅學術白底風 (Clean Academic White Standard):
+   - 投影片比例為 16:9，底色 #FFFFFF / #F1F5F9，標題深石墨色 #0F172A，主色 #0284C7。
+   - 一頁一個核心論點，條目不超過 3~4 點，每點不超過 15 個字。
+   - 完整支援 KaTeX 行內與獨立數學公式。
+   - 內建鍵盤熱鍵 (Space / 翻頁 / F 全螢幕 / P 講者筆記)。</code></pre>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p style="margin-bottom: 6px;">學術論文自動化知識庫與簡報系統 • 專案設計與 AGENTS.md 實作</p>
+      <p style="font-size: 0.8rem; color: #94A3B8;">支援 GitHub Pages 靜態託管 • 完全相容 Obsidian 知識網絡</p>
+    </div>
+  </footer>
+
+</body>
+</html>

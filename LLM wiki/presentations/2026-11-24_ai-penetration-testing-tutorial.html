@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 也能當駭客？——自動化滲透測試與安全智能體通識教學</title>
+  <!-- KaTeX CSS & JS for LaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+  <style>
+    :root {
+      --bg-canvas: #F1F5F9;
+      --bg-card: #FFFFFF;
+      --border-subtle: #E2E8F0;
+      --border-focus: #0284C7;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+      --text-accent: #0284C7;
+      --accent-teal: #0D9488;
+      --accent-amber: #D97706;
+      --card-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
+      --font-serif: "Charter", "Georgia", "Cambria", "Times New Roman", serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Top Progress Bar */
+    #progress-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 4px;
+      background: #CBD5E1;
+      z-index: 100;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 12.5%;
+      background: var(--text-accent);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Slide Deck Wrapper */
+    #deck-container {
+      width: 90vw;
+      max-width: 1200px;
+      height: 84vh;
+      max-height: 700px;
+      position: relative;
+      perspective: 1000px;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      padding: 44px 52px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px) scale(0.99);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+      z-index: 10;
+    }
+
+    /* Slide Header */
+    .slide-header {
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .slide-category {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-accent);
+      margin-bottom: 4px;
+    }
+    .slide-title {
+      font-family: var(--font-serif);
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+    .slide-badge {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* Slide Body */
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    /* Cards & Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+    .card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-accent {
+      border-top: 4px solid var(--text-accent);
+    }
+    .card-teal {
+      border-top: 4px solid var(--accent-teal);
+    }
+    .card-amber {
+      border-top: 4px solid var(--accent-amber);
+    }
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Big Metric Card */
+    .metric-box {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 2.3rem;
+      font-weight: 800;
+      color: var(--text-accent);
+      line-height: 1.1;
+    }
+    .metric-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Bullet List */
+    .bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 1.05rem;
+      line-height: 1.55;
+      color: #334155;
+    }
+    .bullet-item::before {
+      content: "•";
+      color: var(--text-accent);
+      font-weight: bold;
+      font-size: 1.3rem;
+      line-height: 1;
+    }
+
+    /* Academic 3-line Table */
+    .academic-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+      margin-top: 6px;
+    }
+    .academic-table thead th {
+      border-top: 2px solid #0F172A;
+      border-bottom: 1px solid #0F172A;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 700;
+      color: #0F172A;
+      background: #F8FAFC;
+    }
+    .academic-table tbody td {
+      border-bottom: 1px solid #E2E8F0;
+      padding: 10px 14px;
+      color: #334155;
+      vertical-align: middle;
+    }
+    .academic-table tbody tr:last-child td {
+      border-bottom: 2px solid #0F172A;
+    }
+
+    /* Slide Footer */
+    .slide-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 14px;
+      margin-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* Paper Download Link Card */
+    .paper-link-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      background: #FFFFFF;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .paper-link-card:hover {
+      border-color: var(--text-accent);
+      background: #F0F9FF;
+      transform: translateX(4px);
+    }
+    .download-btn {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #FFFFFF;
+      background: var(--text-accent);
+      padding: 6px 14px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Navigation Controls */
+    #nav-bar {
+      position: fixed;
+      bottom: 18px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 30px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      z-index: 50;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      font-size: 1.1rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      background: #E2E8F0;
+      color: var(--text-main);
+    }
+    #slide-indicator {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-main);
+      padding: 0 8px;
+    }
+
+    /* Speaker Notes Panel (Press P to toggle) */
+    #speaker-notes-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      background: #0F172A;
+      color: #F8FAFC;
+      border-top: 3px solid var(--text-accent);
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.25);
+      padding: 24px 36px;
+      z-index: 90;
+      transform: translateY(105%);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 38vh;
+      overflow-y: auto;
+    }
+    #speaker-notes-panel.open {
+      transform: translateY(0);
+    }
+    .notes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: #94A3B8;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    #notes-body {
+      font-size: 1.05rem;
+      line-height: 1.7;
+      color: #E2E8F0;
+    }
+
+    /* Keyboard Shortcuts Pill */
+    .shortcuts-pill {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Progress Bar -->
+  <div id="progress-container">
+    <div id="progress-bar"></div>
+  </div>
+
+  <!-- Main Slide Deck -->
+  <div id="deck-container">
+
+    <!-- SLIDE 1: 封面 -->
+    <div class="slide active" data-slide="1">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">CYBERSECURITY & AI AGENTS • 通識教學導論</div>
+          <h1 class="slide-title">AI 也能當駭客？</h1>
+        </div>
+        <span class="slide-badge">LLM Wiki 專題教學</span>
+      </div>
+      <div class="slide-body" style="text-align: center; justify-content: center; gap: 24px;">
+        <p style="font-family: var(--font-serif); font-size: 1.6rem; color: #334155; max-width: 850px; margin: 0 auto; line-height: 1.5;">
+          自動化滲透測試與強化學習智能體的攻防進化史
+        </p>
+        <div class="grid-3" style="max-width: 900px; margin: 0 auto; width: 100%;">
+          <div class="card card-accent" style="text-align: left;">
+            <div class="card-title">🏰 迷宮尋寶</div>
+            <div style="font-size: 0.95rem; color: #475569;">POMDP 數學建模<br>戰爭迷霧下的信念推斷</div>
+          </div>
+          <div class="card card-teal" style="text-align: left;">
+            <div class="card-title">⚔️ 實戰突破</div>
+            <div style="font-size: 0.95rem; color: #475569;">Raiju 強化學習<br>A2C 跨平台後滲透 >84%</div>
+          </div>
+          <div class="card card-amber" style="text-align: left;">
+            <div class="card-title">🧠 智慧參謀</div>
+            <div style="font-size: 0.95rem; color: #475569;">PentestGPT 大模型<br>任務樹多智能體協同作戰</div>
+          </div>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-muted);">
+          按 <span class="shortcuts-pill">Space</span> 或 <span class="shortcuts-pill">→</span> 進入導覽 • 按 <span class="shortcuts-pill">P</span> 開啟講者逐字備忘稿 • 按 <span class="shortcuts-pill">F</span> 全螢幕
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>講者：基於 5 篇核心學術文獻構建</span>
+        <span>Slide 1 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        大家好！歡迎來到今天的資安通識教學。在電影裡，我們常看到神級駭客坐在黑漆漆的房間裡瘋狂敲鍵盤，幾秒鐘就黑掉整個五角大廈。但在現實世界中，攻擊或守護一個龐大的企業網路需要耗費資安專家數千個小時。有沒有可能讓 AI 成為我們的「數位白帽神偷」，自動尋找系統弱點並修復它？今天我們將用 5 篇頂級學術論文，帶大家看懂 AI 是怎麼一步步學會「自動化滲透測試」的！
+      </div>
+    </div>
+
+    <!-- SLIDE 2: 城堡、神偷與戰爭迷霧 -->
+    <div class="slide" data-slide="2">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">PROBLEM INTUITION</div>
+          <h2 class="slide-title">核心觀念破冰：城堡、神偷與白帽特務</h2>
+        </div>
+        <span class="slide-badge">Penetration Testing 101</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card" style="background: #F8FAFC; border-left: 4px solid #64748B;">
+            <div class="card-title" style="color: #334155;">🏰 什麼是滲透測試？</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>生活比喻</strong>：企業網路就像存放黃金的現代城堡。</li>
+              <li class="bullet-item"><strong>以攻促防</strong>：城堡主人聘請「良心神偷（白帽駭客）」，在真正的盜賊（黑帽駭客）來之前，嘗試找出沒鎖好的門窗與通風孔。</li>
+              <li class="bullet-item"><strong>現實痛點</strong>：現代網路有數萬台電腦，人類專家每天敲鍵盤敲到手軟，資安人才嚴重短缺。</li>
+            </ul>
+          </div>
+
+          <div class="card" style="background: #F0F9FF; border-left: 4px solid var(--text-accent);">
+            <div class="card-title" style="color: var(--text-accent);">🤖 傳統腳本 vs AI 智能體</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>傳統自動化 (腳本噴射)</strong>：拿著一萬把鑰匙盲目硬插，經常把門鎖搞壞（造成伺服器崩潰當機）。</li>
+              <li class="bullet-item"><strong>AI 安全智能體</strong>：擁有「眼睛（掃描偵察）」、「大腦（強化學習決策）」與「雙手（工具模組）」，像特務般靜默潛行。</li>
+              <li class="bullet-item"><strong>終極目標</strong>：在不破壞伺服器的前提下，自主摸索出最隱密的防護破口。</li>
+            </ul>
+          </div>
+        </div>
+        <div style="font-size: 0.95rem; color: #475569; background: #FFFBEB; border: 1px solid #FDE68A; padding: 12px 18px; border-radius: 8px;">
+          💡 <strong>認知結論</strong>：自動化滲透測試不是為了「搞破壞」，而是為了在壞人入侵前「跑得比對手更快一步」！
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Autonomous Penetration Testing]]</span>
+        <span>Slide 2 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        我們先來釐清什麼叫「滲透測試」。這不是去犯罪，而是所謂的「以攻促防」。企業請白帽駭客來攻擊自己的系統，看看哪裡有漏洞。但傳統的自動化腳本非常笨，它就像一個強盜拿著一萬把鑰匙對著門鎖瘋狂硬轉，不僅容易觸發警報，還常常把鎖芯搞壞（造成伺服器崩潰）。所以我們需要一個懂得看情況、會動腦推理的 AI 智能體。
+      </div>
+    </div>
+
+    <!-- SLIDE 3: 戰爭迷霧與 POMDP -->
+    <div class="slide" data-slide="3">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">MATHEMATICAL FOUNDATION</div>
+          <h2 class="slide-title">理論基石：戰爭迷霧下的遊戲 (POMDP)</h2>
+        </div>
+        <span class="slide-badge">[[Schwartz2019-POMDPPenTest.md]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">♟️ 為什麼滲透比圍棋更難？</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>圍棋 (完全資訊公開 MDP)</strong>：棋盤 361 點一目了然，雙方沒有任何隱藏秘密。</li>
+              <li class="bullet-item"><strong>網路滲透 (部分可觀察 POMDP)</strong>：站在城堡門口，AI 看不見內網有幾層樓、藏著什麼機關，只能靠發送封包得到的局部線索（如回傳錯誤代碼）去猜測。</li>
+            </ul>
+          </div>
+
+          <div class="card card-accent">
+            <div class="card-title" style="color: var(--text-accent);">🎲 信念狀態 (Belief State) 數學直覺</div>
+            <p style="font-size: 0.95rem; color: #475569;">
+              AI 在腦海中維護當前真實網絡狀態的機率分佈：
+            </p>
+            <div style="background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 0.85rem; text-align: center;">
+              $$b'(s') = \eta \cdot \mathcal{O}(o \mid s', a) \sum_{s \in \mathcal{S}} \mathcal{T}(s' \mid s, a) b(s)$$
+            </div>
+            <div style="font-size: 0.9rem; color: #0369A1; margin-top: 4px;">
+              • 每次探測收到觀測值 $o$，動態更新心中對系統漏洞的猜測 $b'(s')$。
+            </div>
+          </div>
+        </div>
+        <div class="metric-box" style="margin-top: 6px;">
+          <div class="metric-value">POMDP</div>
+          <div class="metric-label">澳洲國立大學 (ANU) 論文奠定：將攻防不確定性轉化為精確機率決策</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>理論根基：[[POMDP in Cyber Operations]], [[Schwartz2019-POMDPPenTest.md]]</span>
+        <span>Slide 3 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        為什麼讓 AI 玩滲透測試比下圍棋難得多？因為下圍棋是「明牌」，所有棋子都在你眼前。但網路滲透是「帶有戰爭迷霧的迷宮」。你發送一個探測封包，對方回傳一個錯誤代碼，你只能靠這點蛛絲馬跡去猜內網的真實狀態。在數學上，這叫做 POMDP（部分可觀察馬可夫決策過程）。AI 必須在資訊極度不透明的情況下做最優決策。
+      </div>
+    </div>
+
+    <!-- SLIDE 4: DRL 演進 -->
+    <div class="slide" data-slide="4">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">DRL BREAKTHROUGHS</div>
+          <h2 class="slide-title">演進第一代：深度強化學習初試啼聲</h2>
+        </div>
+        <span class="slide-badge">DeepExploit & CyberBattleSim</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card card-teal">
+            <div class="card-title" style="color: var(--accent-teal);">🔥 DeepExploit (Black Hat USA 2018)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>全球首創開山之作</strong>：首次將非同步優勢動作評價（A3C）連接資安界武器庫 Metasploit。</li>
+              <li class="bullet-item"><strong>揮別盲目射擊</strong>：神經網絡透過靶機自我博弈，學會「看到什麼伺服器版本，就只挑選最精準的 Exploit」，大幅降低警報率。</li>
+            </ul>
+          </div>
+
+          <div class="card card-accent">
+            <div class="card-title" style="color: var(--text-accent);">🌐 微軟 CyberBattleSim (2021)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>開源虛擬網絡沙盒</strong>：將電腦拓撲抽象為有向圖 $G = (V, E)$。</li>
+              <li class="bullet-item"><strong>安全無害訓練</strong>：讓 DRL 智能體在絕對安全的環境中，像打電動一樣學會「最短路徑橫向移動感染（Lateral Movement）」。</li>
+            </ul>
+          </div>
+        </div>
+        <div style="font-size: 0.95rem; color: #475569; background: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px; border-radius: 8px; text-align: center;">
+          ⚡ <strong>里程碑意義</strong>：證明了 AI 不僅能下圍棋、打電動，還能精準掌握真實資安工具的決策邏輯！
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯文獻：[[Takaesu2018-DeepExploit.md]], [[Microsoft2021-CyberBattleSim.md]]</span>
+        <span>Slide 4 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        2018 年，資安界迎來了第一次重大突破。三井物產的資安專家在世界黑帽大會 Black Hat 上發表了 DeepExploit。他第一次把強化學習大腦裝在最有名的滲透工具 Metasploit 上，AI 學會了精準開鎖，不再盲目開火。隨後在 2021 年，微軟也推出了 CyberBattleSim，讓大家可以在安全的虛擬環境中像打電動一樣訓練 AI 攻防特務。
+      </div>
+    </div>
+
+    <!-- SLIDE 5: 旗艦論文 Raiju -->
+    <div class="slide" data-slide="5">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">FLAGSHIP RESEARCH: RAIJU</div>
+          <h2 class="slide-title">實戰巔峰：Raiju 跨平台自動化後滲透</h2>
+        </div>
+        <span class="slide-badge">[[Pham2024-Raiju.md]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card card-accent">
+            <div class="card-title">🛡️ 攻克三大後滲透難題</div>
+            <ul class="bullet-list" style="font-size: 0.9rem;">
+              <li class="bullet-item"><strong>10 維跨平台特徵</strong>：一套代碼同時搞定 Windows UAC/Admin 與 Linux Root/核心漏洞。</li>
+              <li class="bullet-item"><strong>99 個模組封裝</strong>：精選 95 個提權（PE）、2 個密碼雜湊提取（GH）、2 個橫向移動（LM）。</li>
+              <li class="bullet-item"><strong>RW20 密集階梯獎勵</strong>：不再只有「拿到 Root」才給分，摸索到關鍵資訊即給予階梯獎勵，訓練速度飆升。</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="color: #0369A1;">🏆 A2C 演算法實戰碾壓 PPO</div>
+            <div class="metric-box" style="margin-bottom: 8px;">
+              <div class="metric-value" style="color: #0284C7;">> 84%</div>
+              <div class="metric-label">跨平台綜合滲透利用成功率 (Success Rate)</div>
+            </div>
+            <p style="font-size: 0.85rem; color: #64748B;">
+              折扣累積回報：$R_t = \sum_{i=t}^T \gamma^{i-t} r_i$。在離散且稀疏的滲透步驟中，A2C 探索效率大幅超越常規 PPO！
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>發表於 Computer Networks 253 (2024) • 原始來源：raw/papers/Raiju.pdf</span>
+        <span>Slide 5 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        現在我們來到我們 Wiki 的核心旗艦論文——2024 年發表於頂刊 Computer Networks 的《Raiju》。當攻擊者拿到一台普通使用者的電腦後，最困難的是「後滲透」——也就是怎麼把自己升級成超級管理員（Root），以及怎麼跳到隔壁的主機。Raiju 解決了 Windows 和 Linux 不通用的難題，並且設計了超聰明的階梯式獎勵函數，讓 A2C 演算法在靶場中打出了超過 84% 的驚人成功率！
+      </div>
+    </div>
+
+    <!-- SLIDE 6: 新世代 PentestGPT -->
+    <div class="slide" data-slide="6">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">GENERATIVE AI FRONTIER</div>
+          <h2 class="slide-title">新世代巨變：PentestGPT 大模型作戰參謀長</h2>
+        </div>
+        <span class="slide-badge">[[Deng2023-PentestGPT.md]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <div class="card card-accent">
+            <div class="card-title">🧠 1. 作戰參謀長<br>(Reasoning)</div>
+            <p style="font-size: 0.85rem; color: #475569;">
+              維護「滲透任務樹 (PTT)」，只看大局戰略，不看雜亂輸出，<strong>徹底解決 Context Loss 遺忘毛病</strong>。
+            </p>
+          </div>
+          <div class="card card-teal">
+            <div class="card-title">⚔️ 2. 前線突擊隊<br>(Generation)</div>
+            <p style="font-size: 0.85rem; color: #475569;">
+              將抽象策略轉化為精確命令行語法（`nmap`, `sqlmap`），<strong>消弭參數幻覺</strong>。
+            </p>
+          </div>
+          <div class="card card-amber">
+            <div class="card-title">📡 3. 戰場情報員<br>(Parsing)</div>
+            <p style="font-size: 0.85rem; color: #475569;">
+              過濾幾萬行雜亂終端輸出，<strong>濃縮 85% 廢話</strong>，只回報關鍵漏洞線索。
+            </p>
+          </div>
+        </div>
+        <div class="card" style="background: #F0FDF4; border-color: #BBF7D0; text-align: center;">
+          <strong style="color: #166534; font-size: 1.1rem;">USENIX Security 2024 頂會成果：HackTheBox 實戰奪旗率暴增 +228%</strong>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Deng2023-PentestGPT.md]], [[LLM Security Agent]]</span>
+        <span>Slide 6 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        強化學習雖然厲害，但如果遇到從未見過的新系統或複雜的網頁，就很容易不知所措。2024 年在資安四大頂會 USENIX Security 上發表的 PentestGPT 帶來了全新變革。它把大語言模型當作「作戰參謀長」，搭配生成部隊和情報員，三個模組分工合作。參謀長只看大局，成功攻陷了 HackTheBox 上好幾台中高難度的實體伺服器！
+      </div>
+    </div>
+
+    <!-- SLIDE 7: 挑戰與倫理 -->
+    <div class="slide" data-slide="7">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">ETHICS & LIMITATIONS</div>
+          <h2 class="slide-title">攻防核心挑戰與資安倫理的雙面刃</h2>
+        </div>
+        <span class="slide-badge">Dual-Use Technology</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card" style="background: #FFF7ED; border-color: #FFEDD5;">
+            <div class="card-title" style="color: #C2410C;">⚡ 兩大技術挑戰</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>狀態空間爆炸</strong>：真實企業網路有數萬台機器，AI 若缺乏先驗知識容易陷入無效死循環。</li>
+              <li class="bullet-item"><strong>主動防禦反制 (EDR/IDS)</strong>：現代防毒軟體會即時封鎖異常探測，AI 必須學會「低慢潛伏 (Low and Slow)」才能生存。</li>
+            </ul>
+          </div>
+
+          <div class="card" style="background: #FEF2F2; border-color: #FEE2E2;">
+            <div class="card-title" style="color: #991B1B;">⚖️ 資安倫理防線</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>以攻促防的本質</strong>：AI 滲透技術是雙面刃。學界研發自動化攻擊的唯一目的，是為了讓防守方能以 100 倍速度找出弱點。</li>
+              <li class="bullet-item"><strong>安全沙盒防護</strong>：所有自主測試必須在授權靶場或虛擬隔離網段中執行，絕不對生產環境盲目投放。</li>
+            </ul>
+          </div>
+        </div>
+        <div style="font-size: 0.95rem; color: #475569; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 14px; border-radius: 8px; text-align: center;">
+          🛡️ <strong>核心格言</strong>：最好的防守，是深知攻擊者如何思考；AI 白帽特務，是守護數位世界的堅固盾牌。
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>倫理與法規：Responsible AI in Cybersecurity</span>
+        <span>Slide 7 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        技術發展到這裡，大家心裡一定會有個疑問：AI 駭客這麼強，世界會不會毀滅？在技術上，AI 面臨著狀態爆炸和防火牆反制的挑戰。但在倫理上，我們必須明確認知：自動化滲透測試是一把雙面刃。科學家研發這項技術的唯一目的，是讓企業能用 AI 來自我防護，在真正的壞蛋找上門前把漏洞補起來。
+      </div>
+    </div>
+
+    <!-- SLIDE 8: 總結與下載 -->
+    <div class="slide" data-slide="8">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">ROADMAP & DOWNLOADS</div>
+          <h2 class="slide-title">知識總結與 5 篇核心文獻地圖</h2>
+        </div>
+        <span class="slide-badge">5 Core Papers Ingested</span>
+      </div>
+      <div class="slide-body">
+        <table class="academic-table">
+          <thead>
+            <tr>
+              <th>年份</th>
+              <th>代表文獻</th>
+              <th>演算法/核心機制</th>
+              <th>突破成果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2018</td>
+              <td>DeepExploit</td>
+              <td>A3C + Metasploit</td>
+              <td>首創 DRL 自動化利用，告別盲目噴射</td>
+            </tr>
+            <tr>
+              <td>2019</td>
+              <td>POMDP-PenTest</td>
+              <td>部分可觀察信念狀態</td>
+              <td>數學形式化網路攻防不確定性</td>
+            </tr>
+            <tr>
+              <td>2021</td>
+              <td>CyberBattleSim</td>
+              <td>微軟開源拓撲 Gym</td>
+              <td>虛擬環境橫向移動安全博弈</td>
+            </tr>
+            <tr>
+              <td><strong>2024</strong></td>
+              <td><strong>Raiju (本庫核心)</strong></td>
+              <td><strong>A2C + RW20 階梯獎勵</strong></td>
+              <td><strong>跨平台後滲透，利用成功率 >84%</strong></td>
+            </tr>
+            <tr>
+              <td>2024</td>
+              <td>PentestGPT</td>
+              <td>大語言模型三模組解耦</td>
+              <td>HackTheBox 實戰奪旗率暴增 +228%</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="font-size: 0.95rem; color: #475569; margin-top: 6px;">
+          📥 <strong>5 篇核心學術文獻直接下載（點擊啟動 Wiki Ingest）</strong>：
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <a class="paper-link-card" href="https://doi.org/10.1016/j.comnet.2024.110706" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">Pham et al. (Raiju)</div>
+              <div style="font-size: 0.75rem; color: #64748B;">Computer Networks 2024 • 本地 PDF 已收錄</div>
+            </div>
+            <span class="download-btn">📥 本地 PDF</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2308.06782" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">PentestGPT (USENIX Sec 24)</div>
+              <div style="font-size: 0.75rem; color: #64748B;">arXiv:2308.06782 • LLM 安全智能體</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2104.09363" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">CyberBattleSim (Microsoft)</div>
+              <div style="font-size: 0.75rem; color: #64748B;">arXiv:2104.09363 • 微軟強化學習沙盒</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/1905.05965" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">POMDP-PenTest (ANU 19)</div>
+              <div style="font-size: 0.75rem; color: #64748B;">arXiv:1905.05965 • 攻防數學形式化</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>感謝聆聽！請按 P 鍵回顧講者筆記</span>
+        <span>Slide 8 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        最後我們做個總結：從 2018 年的單一演算法嘗試，到數學形式化，到微軟的沙盒，再到我們庫內的《Raiju》以及最新的大模型智能體，AI 滲透測試已經從科幻走入現實。簡報最後整理了這 5 篇文獻的下載連結。感謝大家今天的聆聽，歡迎提問交流！
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Speaker Notes Panel Drawer -->
+  <div id="speaker-notes-panel">
+    <div class="notes-header">
+      <span>SPEAKER NOTES (講者逐字備忘稿 - 按 P 鍵開關)</span>
+      <span id="notes-slide-id">SLIDE 1</span>
+    </div>
+    <div id="notes-body">
+      載入講者備忘錄...
+    </div>
+  </div>
+
+  <!-- Bottom Floating Navigation Bar -->
+  <div id="nav-bar">
+    <button class="nav-btn" onclick="prevSlide()" title="上一頁 (←)">‹</button>
+    <span id="slide-indicator">1 / 8</span>
+    <button class="nav-btn" onclick="nextSlide()" title="下一頁 (Space / →)">›</button>
+    <button class="nav-btn" onclick="toggleNotes()" title="講者備忘錄 (P)">🎤 講稿</button>
+    <button class="nav-btn" onclick="toggleFullscreen()" title="全螢幕 (F)">⛶ 全螢幕</button>
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 8;
+    const slides = document.querySelectorAll('.slide');
+    const progressBar = document.getElementById('progress-bar');
+    const slideIndicator = document.getElementById('slide-indicator');
+    const notesPanel = document.getElementById('speaker-notes-panel');
+    const notesBody = document.getElementById('notes-body');
+    const notesSlideId = document.getElementById('notes-slide-id');
+
+    function updateSlide(newIndex) {
+      if (newIndex < 1 || newIndex > totalSlides) return;
+      currentSlide = newIndex;
+
+      slides.forEach((slide) => {
+        const slideNum = parseInt(slide.getAttribute('data-slide'));
+        if (slideNum === currentSlide) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      progressBar.style.width = ((currentSlide / totalSlides) * 100) + '%';
+      slideIndicator.innerText = currentSlide + ' / ' + totalSlides;
+      updateSpeakerNotes();
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) updateSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) updateSlide(currentSlide - 1);
+    }
+
+    function toggleNotes() {
+      notesPanel.classList.toggle('open');
+    }
+
+    function updateSpeakerNotes() {
+      const activeSlide = document.querySelector(`.slide[data-slide="${currentSlide}"]`);
+      if (activeSlide) {
+        const notesContent = activeSlide.querySelector('.speaker-notes-content');
+        notesBody.innerHTML = notesContent ? notesContent.innerHTML.trim() : '<em>本頁無備忘稿</em>';
+        notesSlideId.innerText = 'SLIDE ' + currentSlide + ' / ' + totalSlides;
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          alert(`無法進入全螢幕模式: ${err.message}`);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Keyboard Hotkeys
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        toggleNotes();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        updateSlide(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        updateSlide(totalSlides);
+      }
+    });
+
+    // Initialize speaker notes on load
+    updateSpeakerNotes();
+  </script>
+</body>
+</html>

@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>大語言模型如何學會思考？——LLM 推理機制與強化學習通識教學</title>
+  <!-- KaTeX CSS & JS for LaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+  <style>
+    :root {
+      --bg-canvas: #F1F5F9;
+      --bg-card: #FFFFFF;
+      --border-subtle: #E2E8F0;
+      --border-focus: #0284C7;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+      --text-accent: #0284C7;
+      --accent-teal: #0D9488;
+      --accent-amber: #D97706;
+      --card-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
+      --font-serif: "Charter", "Georgia", "Cambria", "Times New Roman", serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Top Progress Bar */
+    #progress-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 4px;
+      background: #CBD5E1;
+      z-index: 100;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 12.5%;
+      background: var(--text-accent);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Slide Deck Wrapper */
+    #deck-container {
+      width: 90vw;
+      max-width: 1200px;
+      height: 84vh;
+      max-height: 700px;
+      position: relative;
+      perspective: 1000px;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      padding: 44px 52px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px) scale(0.99);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+      z-index: 10;
+    }
+
+    /* Slide Header */
+    .slide-header {
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .slide-category {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-accent);
+      margin-bottom: 4px;
+    }
+    .slide-title {
+      font-family: var(--font-serif);
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+    .slide-badge {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* Slide Body */
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    /* Cards & Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+    .card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-accent {
+      border-top: 4px solid var(--text-accent);
+    }
+    .card-teal {
+      border-top: 4px solid var(--accent-teal);
+    }
+    .card-amber {
+      border-top: 4px solid var(--accent-amber);
+    }
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Big Metric Card */
+    .metric-box {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 2.3rem;
+      font-weight: 800;
+      color: var(--text-accent);
+      line-height: 1.1;
+    }
+    .metric-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Bullet List */
+    .bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 1.05rem;
+      line-height: 1.55;
+      color: #334155;
+    }
+    .bullet-item::before {
+      content: "•";
+      color: var(--text-accent);
+      font-weight: bold;
+      font-size: 1.3rem;
+      line-height: 1;
+    }
+
+    /* Academic 3-line Table */
+    .academic-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+      margin-top: 6px;
+    }
+    .academic-table thead th {
+      border-top: 2px solid #0F172A;
+      border-bottom: 1px solid #0F172A;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 700;
+      color: #0F172A;
+      background: #F8FAFC;
+    }
+    .academic-table tbody td {
+      border-bottom: 1px solid #E2E8F0;
+      padding: 10px 14px;
+      color: #334155;
+      vertical-align: middle;
+    }
+    .academic-table tbody tr:last-child td {
+      border-bottom: 2px solid #0F172A;
+    }
+
+    /* Slide Footer */
+    .slide-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 14px;
+      margin-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* Paper Download Link Card */
+    .paper-link-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      background: #FFFFFF;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .paper-link-card:hover {
+      border-color: var(--text-accent);
+      background: #F0F9FF;
+      transform: translateX(4px);
+    }
+    .download-btn {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #FFFFFF;
+      background: var(--text-accent);
+      padding: 6px 14px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Navigation Controls */
+    #nav-bar {
+      position: fixed;
+      bottom: 18px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 30px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      z-index: 50;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      font-size: 1.1rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      background: #E2E8F0;
+      color: var(--text-main);
+    }
+    #slide-indicator {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-main);
+      padding: 0 8px;
+    }
+
+    /* Speaker Notes Panel (Press P to toggle) */
+    #speaker-notes-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      background: #0F172A;
+      color: #F8FAFC;
+      border-top: 3px solid var(--text-accent);
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.25);
+      padding: 24px 36px;
+      z-index: 90;
+      transform: translateY(105%);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 38vh;
+      overflow-y: auto;
+    }
+    #speaker-notes-panel.open {
+      transform: translateY(0);
+    }
+    .notes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: #94A3B8;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    #notes-body {
+      font-size: 1.05rem;
+      line-height: 1.7;
+      color: #E2E8F0;
+    }
+
+    /* Keyboard Shortcuts Pill */
+    .shortcuts-pill {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Progress Bar -->
+  <div id="progress-container">
+    <div id="progress-bar"></div>
+  </div>
+
+  <!-- Main Slide Deck -->
+  <div id="deck-container">
+
+    <!-- SLIDE 1: 封面 -->
+    <div class="slide active" data-slide="1">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">PEDAGOGICAL TUTORIAL • 通識教學導論</div>
+          <h1 class="slide-title">大語言模型如何學會思考？</h1>
+        </div>
+        <span class="slide-badge">LLM Wiki 專題教學</span>
+      </div>
+      <div class="slide-body" style="text-align: center; justify-content: center; gap: 24px;">
+        <p style="font-family: var(--font-serif); font-size: 1.6rem; color: #334155; max-width: 850px; margin: 0 auto; line-height: 1.5;">
+          從「機率接話大師」到「自主邏輯推理」的思維進化之路
+        </p>
+        <div class="grid-3" style="max-width: 900px; margin: 0 auto; width: 100%;">
+          <div class="card card-accent" style="text-align: left;">
+            <div class="card-title">📝 階梯一：草稿紙</div>
+            <div style="font-size: 0.95rem; color: #475569;">思維鏈 (Chain of Thought)<br>打破單步預測限制</div>
+          </div>
+          <div class="card card-teal" style="text-align: left;">
+            <div class="card-title">🗳️ 階梯二：集體表決</div>
+            <div style="font-size: 0.95rem; color: #475569;">自我一致性 (Self-Consistency)<br>多路徑採樣消弭偶發錯誤</div>
+          </div>
+          <div class="card card-amber" style="text-align: left;">
+            <div class="card-title">💡 階梯三：自主演化</div>
+            <div style="font-size: 0.95rem; color: #475569;">強化學習 (RL & GRPO)<br>從客觀規則湧現反思頓悟</div>
+          </div>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-muted);">
+          按 <span class="shortcuts-pill">Space</span> 或 <span class="shortcuts-pill">→</span> 進入導覽 • 按 <span class="shortcuts-pill">P</span> 開啟講者逐字備忘稿 • 按 <span class="shortcuts-pill">F</span> 全螢幕
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>講者：LLM Wiki 知識庫教學專題</span>
+        <span>Slide 1 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        大家好！歡迎來到今天的通識教學簡報。很多人天天用 ChatGPT，但你有沒有好奇過：它真的像人類一樣懂得「思考」嗎？還是它其實只是個超級厲害的「機率接話遊戲」？今天我們就用最生活化、最清楚的方式，帶大家看懂 AI 是怎麼從只會猜下一個字，一步步進化到能解高難度奧數題的思考高手！
+      </div>
+    </div>
+
+    <!-- SLIDE 2: 快思與慢想 -->
+    <div class="slide" data-slide="2">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">COGNITIVE FOUNDATION</div>
+          <h2 class="slide-title">AI 到底在做什麼？快思與慢想的本質對比</h2>
+        </div>
+        <span class="slide-badge">System 1 vs System 2</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card" style="background: #F8FAFC; border-left: 4px solid #64748B;">
+            <div class="card-title" style="color: #334155;">⚡ 系統一：直覺快思 (System 1)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>生活現象</strong>：看到 $2+2$ 瞬間回答 $4$，看到紅燈自然踩煞車。不經思考的直覺反應。</li>
+              <li class="bullet-item"><strong>傳統 LLM 機制</strong>：純粹的「次字預測（Next-Token Prediction）」。不論問題多複雜，都在幾毫秒內直覺噴字。</li>
+              <li class="bullet-item"><strong>致命瓶頸</strong>：遇到五步複合數學題時，因為強迫秒回，缺乏運算緩衝區，容易胡言亂語（幻覺）。</li>
+            </ul>
+          </div>
+
+          <div class="card" style="background: #F0F9FF; border-left: 4px solid var(--text-accent);">
+            <div class="card-title" style="color: var(--text-accent);">🧠 系統二：邏輯慢想 (System 2)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>生活現象</strong>：計算 $47 \times 89$、推導幾何證明、下西洋棋。必須拿出紙筆逐步列式推導。</li>
+              <li class="bullet-item"><strong>現代推理模型</strong>：開闢「工作記憶區（Working Memory）」，把問題拆解，在背後驗算後才輸出答案。</li>
+              <li class="bullet-item"><strong>核心任務</strong>：如何讓原本只會「快思」的神經網絡，學會人類「慢想」的推導步調？</li>
+            </ul>
+          </div>
+        </div>
+        <div style="font-size: 0.95rem; color: #475569; background: #FFFBEB; border: 1px solid #FDE68A; padding: 12px 18px; border-radius: 8px;">
+          💡 <strong>認知結論</strong>：AI 過去不是「笨」，而是被我們逼著「不打草稿、立刻交卷」。教會 AI 推理的第一步，就是給它一張草稿紙！
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>理論根基：[[Scaling Laws]], [[Test-Time Compute]]</span>
+        <span>Slide 2 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        著名認知學家康納曼在《快思慢想》中說過，人有兩種思維模式：一種是直覺反射的「快思」，一種是需要動腦推理的「慢想」。傳統的語言模型就像一個只靠直覺的接話機器人，問它「1+1」它可以秒回，但問它「五步微積分」，它依然試圖用幾毫秒的直覺去猜，當然就會產生荒唐的幻覺。要讓 AI 會推理，關鍵就是教會它「慢想」。
+      </div>
+    </div>
+
+    <!-- SLIDE 3: 思維鏈 (CoT) -->
+    <div class="slide" data-slide="3">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">STEP 1: THE SCRATCHPAD EFFECT</div>
+          <h2 class="slide-title">第一把鑰匙：思維鏈 (Chain of Thought)</h2>
+        </div>
+        <span class="slide-badge">[[Wei2022-ChainOfThought]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title" style="color: #991B1B;">❌ 傳統提示：強迫秒回</div>
+            <p style="font-size: 0.95rem; color: #64748B;">直接由問題預測答案：$P(Y \mid X)$</p>
+            <div style="background: #FEF2F2; padding: 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem; color: #991B1B;">
+              問：小明有 5 顆蘋果，給小華 2 顆，又買了 3 箱（每箱 4 顆），請問小明現在有幾顆？<br>
+              答：20 顆。（猜錯！缺乏步驟）
+            </div>
+            <div class="metric-box" style="margin-top: 8px;">
+              <div class="metric-value" style="color: #DC2626;">17.9%</div>
+              <div class="metric-label">GSM8K 數學基準基準準確率</div>
+            </div>
+          </div>
+
+          <div class="card card-accent">
+            <div class="card-title" style="color: var(--text-accent);">✅ 思維鏈 (CoT)：大腦草稿紙</div>
+            <p style="font-size: 0.95rem; color: #64748B;">插入中間步驟 $C$：$P(C, Y \mid X) = P(C \mid X) \cdot P(Y \mid X, C)$</p>
+            <div style="background: #F0F9FF; padding: 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem; color: #0369A1;">
+              答：讓我們一步步思考：<br>
+              1. 小明原本 5 顆，給小華 2 顆剩：5 - 2 = 3 顆。<br>
+              2. 買了 3 箱，共 3 * 4 = 12 顆。<br>
+              3. 最後總共有 3 + 12 = 15 顆！
+            </div>
+            <div class="metric-box" style="margin-top: 8px;">
+              <div class="metric-value" style="color: #0284C7;">56.9%</div>
+              <div class="metric-label">加入 CoT 提示後準確率爆衝</div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-muted); text-align: center;">
+          *核心秘訣：每一個生成的思考詞都會回灌至自注意力機制（Attention），模型一邊寫、一邊看著自己算出的中間結果！
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Chain of Thought (CoT)]], [[Test-Time Compute]]</span>
+        <span>Slide 3 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        怎麼教 AI 慢想呢？2022 年 Google 團隊發現了一個神奇的現象：只要在提問時加上一句「Let's think step by step（讓我們一步步思考）」，AI 的數學解題能力就從 17% 暴增到近 57%！為什麼？因為神經網絡每生成一個詞，就會把它當作輸入重新看一遍。這就好像我們小時候做數學題，老師給了一張「計算紙」，你一邊在紙上算第一步，看著結果再算第二步，推理能力就這樣被喚醒了！
+      </div>
+    </div>
+
+    <!-- SLIDE 4: 自我一致性 -->
+    <div class="slide" data-slide="4">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">STEP 2: ENSEMBLE REASONING</div>
+          <h2 class="slide-title">第二把鑰匙：自我一致性 (Self-Consistency)</h2>
+        </div>
+        <span class="slide-badge">[[Wang2022-SelfConsistency]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">🚨 單一思考鏈的致命盲點</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>貪婪解碼的代價</strong>：傳統文字生成一向「落子無悔」，只要中間某一步算錯一個數字，後續推導全盤皆輸。</li>
+              <li class="bullet-item"><strong>人類經驗的啟發</strong>：一題多解。如果在考場上你用「代數法」算一次、用「幾何法」算一次，兩次答案都相同，那你幾乎可以 $100\%$ 確信自己算對了！</li>
+            </ul>
+          </div>
+
+          <div class="card card-teal">
+            <div class="card-title" style="color: var(--accent-teal);">🗳️ 多路採樣與多數決演算法</div>
+            <p style="font-size: 0.95rem; color: #475569;">
+              給予輕微隨機度（Temperature > 0），並行生成 $N$ 條獨立思維鏈，統計最終答案投票：
+            </p>
+            <div style="background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 0.85rem; text-align: center;">
+              $$\hat{y} = \arg\max_{y \in \mathcal{Y}} \sum_{i=1}^N \mathbf{1}(y^{(i)} = y)$$
+            </div>
+            <div style="font-size: 0.9rem; color: #0F766E; margin-top: 4px;">
+              • 思路 A：代數列式 $\rightarrow$ 答案 42<br>
+              • 思路 B：圖形比例 $\rightarrow$ 答案 42 (勝出！)<br>
+              • 思路 C：粗心誤算 $\rightarrow$ 答案 30 (淘汰)
+            </div>
+          </div>
+        </div>
+        <div class="card" style="background: #F0FDF4; border-color: #BBF7D0; text-align: center;">
+          <strong style="color: #166534; font-size: 1.1rem;">GSM8K 準確率進一步躍升至 74.4%</strong>
+          <span style="color: #15803D; font-size: 0.9rem;">證實「推論時增加採樣算力（Test-Time Compute）」可以直接換取可靠性！</span>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Self-Consistency]], [[Test-Time Compute]]</span>
+        <span>Slide 4 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        有了草稿紙之後，如果一開始粗心算錯怎麼辦？大家高中考試應該都試過：一道題目用代數解一次、用幾何解一次，如果兩種方法算出來答案都是 42，你交卷時肯定信心滿滿！這就是「自我一致性」的精髓。讓模型並行生成好幾條思考鏈，最後大家投票。少數算錯的被淘汰，多數一致的勝出。
+      </div>
+    </div>
+
+    <!-- SLIDE 5: 強化學習與獎勵引導 -->
+    <div class="slide" data-slide="5">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">STEP 3: REINFORCEMENT LEARNING</div>
+          <h2 class="slide-title">第三把鑰匙：強化學習與獎勵探索 (RL)</h2>
+        </div>
+        <span class="slide-badge">[[Ouyang2022-InstructGPT]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">📖 死背解答 vs 闖關遊戲</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>監督學習 (SFT)</strong>：像學生死背參考書。人類老師寫什麼步驟，AI 就一字不漏背誦。人類教不會的難題，AI 永遠學不會。</li>
+              <li class="bullet-item"><strong>強化學習 (RL)</strong>：像打電動闖關。我們不教它每一步怎麼走，只給目標規則——答對給予獎勵（Reward），答錯給予懲罰。</li>
+            </ul>
+          </div>
+
+          <div class="card card-amber">
+            <div class="card-title" style="color: var(--accent-amber);">🎯 PPO 演算法：調整思維機率</div>
+            <p style="font-size: 0.95rem; color: #475569;">
+              利用優勢函數 $\hat{A}_t$ 獎勵好思路、懲罰爛思路：
+            </p>
+            <div style="background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 0.85rem; text-align: center;">
+              $$\mathcal{L}_{\text{PPO}}(\phi) \approx \hat{\mathbb{E}} \left[ \min\left( \frac{\pi_\phi}{\pi_{\text{old}}} \hat{A}_t, \, \text{clip} \right) \right]$$
+            </div>
+            <ul class="bullet-list" style="font-size: 0.85rem; margin-top: 6px;">
+              <li class="bullet-item">$\hat{A}_t > 0$（通往正確解答）：調高該思考路徑被選取的機率。</li>
+              <li class="bullet-item">$\hat{A}_t < 0$（導向錯誤解答）：抑制並淘汰該思考習慣。</li>
+            </ul>
+          </div>
+        </div>
+        <div style="font-size: 0.9rem; color: #64748B;">
+          *在安全測試框架 [[Pham2024-Raiju]] 中，RL 智能體同樣藉由這種獎勵機制，在模擬網絡中自學高達 84% 成功率的滲透路徑！
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[RLHF and PPO]], [[Pham2024-Raiju.md]]</span>
+        <span>Slide 5 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        前面兩把鑰匙，本質上還是人類「牽著 AI 的手」告訴它怎麼做。但人類的解題思路不一定是最完美的。能不能像訓練 AlphaGo 下圍棋一樣，只告訴 AI 對與錯，讓它自己去碰撞、去摸索？這就是強化學習（RL）。做對了給胡蘿蔔（Positive Reward），做錯了給大棒。模型在幾百萬次的摸索中，逐漸摸索出最精準的思維路徑。
+      </div>
+    </div>
+
+    <!-- SLIDE 6: 純強化學習的頓悟 -->
+    <div class="slide" data-slide="6">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">BREAKTHROUGH: ZERO-HUMAN RL</div>
+          <h2 class="slide-title">純強化學習突破：大腦的「頓悟時刻 (Aha Moment)」</h2>
+        </div>
+        <span class="slide-badge">[[DeepSeek2025-R1]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card card-accent">
+            <div class="card-title">🌟 完全零示範資料的純粹演化</div>
+            <p style="font-size: 0.95rem; color: #475569; line-height: 1.6;">
+              DeepSeek-R1-Zero 拔除所有人類示範解答，僅使用 GRPO 演算法與答案對錯獎勵。在數千輪的自我博弈中，模型展現了令人震撼的自主行為：
+            </p>
+            <ul class="bullet-list" style="font-size: 0.9rem;">
+              <li class="bullet-item"><strong>主動生成思維區塊</strong>：自發學會使用 <code>&lt;think&gt; ... &lt;/think&gt;</code> 標籤。</li>
+              <li class="bullet-item"><strong>思考長度自發暴增</strong>：從初始的數十字自主延長到數千字，自學複雜推演。</li>
+            </ul>
+          </div>
+
+          <div class="card" style="background: #F8FAFC; border: 1px solid #CBD5E1;">
+            <div class="card-title" style="color: #0369A1;">🔍 自發湧現的自我反思 (Self-Reflection)</div>
+            <div style="background: #0F172A; color: #38BDF8; font-family: var(--font-mono); font-size: 0.8rem; padding: 12px; border-radius: 6px; line-height: 1.5;">
+              "Wait, wait, wait... let me reconsider the second equation. If x < 0, then my previous assumption fails! Let me start over with case 2..."
+            </div>
+            <div style="font-size: 0.85rem; color: #475569; margin-top: 8px;">
+              模型在卡關時，竟然自發學會停下來自言自語：「等等，讓我重新檢查這個條件，如果 $x < 0$ 我前面就假定錯了！讓我重算...」
+            </div>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top: 6px;">
+          <div class="metric-box">
+            <div class="metric-value">79.8%</div>
+            <div class="metric-label">美國數學邀請賽 AIME 2024 (人類頂尖水準)</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value">97.3%</div>
+            <div class="metric-label">MATH-500 奧林匹克數學挑戰準確率</div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[DeepSeek-R1]], [[Group Relative Policy Optimization (GRPO)]]</span>
+        <span>Slide 6 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        今年 AI 領域最震撼的突破莫過於純強化學習。研發團隊完全沒有教 AI 怎麼寫草稿，只是在背後用規則判定答案對不對。結果模型為了拿高分，竟然自己「悟出」了自我審查！它在解題過程中會突然停下來自言自語說：「等等，我前面好像漏看了一個條件，重來一次。」這不是工程師寫死在代碼裡的，而是神經網絡為了追求極致邏輯正確，自發湧現的思考行為！
+      </div>
+    </div>
+
+    <!-- SLIDE 7: 思考稅與代價 -->
+    <div class="slide" data-slide="7">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">TRADE-OFF & CHALLENGES</div>
+          <h2 class="slide-title">思考稅 (Reasoning Tax)：深度推理的代價與局限</h2>
+        </div>
+        <span class="slide-badge">[[Test-Time Compute]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card" style="background: #FFF7ED; border-color: #FFEDD5;">
+            <div class="card-title" style="color: #C2410C;">⏳ 代價一：推論延遲 (Latency)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>從秒回變長考</strong>：以往聊天模型 0.5 秒開始吐字；推理模型為完成長思維鏈，必須在背景生成 2000~5000 個 Token。</li>
+              <li class="bullet-item"><strong>互動心流中斷</strong>：等待時間長達 30–60 秒，對即時對話與課堂提問造成嚴重的等待摩擦。</li>
+            </ul>
+          </div>
+
+          <div class="card" style="background: #FEF2F2; border-color: #FEE2E2;">
+            <div class="card-title" style="color: #991B1B;">⚖️ 代價二：軟性學科的裁判缺失</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item"><strong>數理與程式</strong>：具備天然客觀的確定性驗證器（Compiler、精確數值匹對）。</li>
+              <li class="bullet-item"><strong>語文、哲學與人文</strong>：缺乏客觀對錯判定標準。模型容易陷入堆砌排比句的「獎勵作弊 (Reward Hacking)」，產生華而不實的空話。</li>
+            </ul>
+          </div>
+        </div>
+        <div style="font-size: 0.95rem; color: #475569; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 14px; border-radius: 8px;">
+          📌 <strong>工程啟示</strong>：不是所有問題都需要「深思熟慮」！未來的理想架構是混合分流：簡單問題走輕量小模型（秒回），高難度數理問題才啟動重型慢想模型。
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Test-Time Compute]], [[Math Reasoning Benchmarks]]</span>
+        <span>Slide 7 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        但是，讓 AI 學會思考並不是百利而無一害的。在工程上有個名詞叫「思考稅（Reasoning Tax）」。你讓它思考，它每一步都要算幾千個 Token，以前你發訊息它立刻秒回，現在你要盯著轉圈圈等 40 秒。而且，目前這套思考機制在有客觀標準答案的數理、寫程式上非常強，但在作文、哲學或生活對話中，因為沒有標準答案，AI 反而容易鑽漏洞講空話。
+      </div>
+    </div>
+
+    <!-- SLIDE 8: 總結與延伸學習 -->
+    <div class="slide" data-slide="8">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">RECAP & OPEN RESOURCES</div>
+          <h2 class="slide-title">知識總結與延伸學習資源</h2>
+        </div>
+        <span class="slide-badge">Roadmap & Downloads</span>
+      </div>
+      <div class="slide-body">
+        <table class="academic-table">
+          <thead>
+            <tr>
+              <th>進化階段</th>
+              <th>代表技術</th>
+              <th>大腦類比</th>
+              <th>核心突破成果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>階段一</strong></td>
+              <td>思維鏈 (CoT)</td>
+              <td>草稿紙</td>
+              <td>展開思考時間維度，GSM8K: $17.9\% \rightarrow 56.9\%$</td>
+            </tr>
+            <tr>
+              <td><strong>階段二</strong></td>
+              <td>自我一致性 (Self-Consistency)</td>
+              <td>集體多數決</td>
+              <td>多路徑消除單點隨機錯誤，提升至 $74.4\%$</td>
+            </tr>
+            <tr>
+              <td><strong>階段三</strong></td>
+              <td>純強化學習 (GRPO)</td>
+              <td>頓悟與自我反思</td>
+              <td>無人教導下湧現回溯修正，AIME 達 $79.8\%$</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="font-size: 0.95rem; color: #475569; margin-top: 6px;">
+          📥 <strong>延伸文獻下載（點擊直接下載 PDF 並可無縫納入 Wiki）</strong>：
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2408.03314" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">Scaling LLM Test-Time Compute Optimally</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2408.03314 • 深入探討推論期增加思考算力如何超越 10 倍模型擴展</div>
+            </div>
+            <span class="download-btn">📥 下載論文</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2403.09629" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">Quiet-STaR: Language Models Teach Themselves to Think Before Speaking</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2403.09629 • 如何讓語言模型在開口回答前於內心自言自語進行預先思考</div>
+            </div>
+            <span class="download-btn">📥 下載論文</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2305.20050" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">Let's Verify Step by Step</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2305.20050 • OpenAI 過程監督（Process Supervision）關鍵奠基論文</div>
+            </div>
+            <span class="download-btn">📥 下載論文</span>
+          </a>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>感謝聆聽！請按 P 鍵回顧講者筆記</span>
+        <span>Slide 8 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        最後我們做個總結：AI 從一個只會猜下一個字的語言模型，到今天能夠反覆推敲難題的推理大師，靠的就是草稿紙、集體表決以及強化學習的自我演化。在簡報最後我幫大家整理了三篇最前沿的參考文獻，大家點擊就可以直接下載 PDF 開始自主研讀。謝謝大家今天的聆聽！
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Speaker Notes Panel Drawer -->
+  <div id="speaker-notes-panel">
+    <div class="notes-header">
+      <span>SPEAKER NOTES (講者逐字備忘稿 - 按 P 鍵開關)</span>
+      <span id="notes-slide-id">SLIDE 1</span>
+    </div>
+    <div id="notes-body">
+      載入講者備忘錄...
+    </div>
+  </div>
+
+  <!-- Bottom Floating Navigation Bar -->
+  <div id="nav-bar">
+    <button class="nav-btn" onclick="prevSlide()" title="上一頁 (←)">‹</button>
+    <span id="slide-indicator">1 / 8</span>
+    <button class="nav-btn" onclick="nextSlide()" title="下一頁 (Space / →)">›</button>
+    <button class="nav-btn" onclick="toggleNotes()" title="講者備忘錄 (P)">🎤 講稿</button>
+    <button class="nav-btn" onclick="toggleFullscreen()" title="全螢幕 (F)">⛶ 全螢幕</button>
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 8;
+    const slides = document.querySelectorAll('.slide');
+    const progressBar = document.getElementById('progress-bar');
+    const slideIndicator = document.getElementById('slide-indicator');
+    const notesPanel = document.getElementById('speaker-notes-panel');
+    const notesBody = document.getElementById('notes-body');
+    const notesSlideId = document.getElementById('notes-slide-id');
+
+    function updateSlide(newIndex) {
+      if (newIndex < 1 || newIndex > totalSlides) return;
+      currentSlide = newIndex;
+
+      slides.forEach((slide) => {
+        const slideNum = parseInt(slide.getAttribute('data-slide'));
+        if (slideNum === currentSlide) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      progressBar.style.width = ((currentSlide / totalSlides) * 100) + '%';
+      slideIndicator.innerText = currentSlide + ' / ' + totalSlides;
+      updateSpeakerNotes();
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) updateSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) updateSlide(currentSlide - 1);
+    }
+
+    function toggleNotes() {
+      notesPanel.classList.toggle('open');
+    }
+
+    function updateSpeakerNotes() {
+      const activeSlide = document.querySelector(`.slide[data-slide="${currentSlide}"]`);
+      if (activeSlide) {
+        const notesContent = activeSlide.querySelector('.speaker-notes-content');
+        notesBody.innerHTML = notesContent ? notesContent.innerHTML.trim() : '<em>本頁無備忘稿</em>';
+        notesSlideId.innerText = 'SLIDE ' + currentSlide + ' / ' + totalSlides;
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          alert(`無法進入全螢幕模式: ${err.message}`);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Keyboard Hotkeys
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        toggleNotes();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        updateSlide(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        updateSlide(totalSlides);
+      }
+    });
+
+    // Initialize speaker notes on load
+    updateSpeakerNotes();
+  </script>
+</body>
+</html>

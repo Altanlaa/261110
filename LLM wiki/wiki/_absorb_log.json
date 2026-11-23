@@ -1,0 +1,41 @@
+﻿{
+  "absorbed_entries": [
+    {
+      "id": "2025-deepseek-r1",
+      "date": "2025-01-22",
+      "entry_file": "2025-01-22_2025-deepseek-r1.md",
+      "absorbed_at": "2026-11-16T20:35:00",
+      "touched_articles": [
+        "DeepSeek-R1",
+        "Group Relative Policy Optimization (GRPO)",
+        "Multi-Head Latent Attention (MLA)",
+        "Test-Time Compute",
+        "Math Reasoning Benchmarks"
+      ]
+    },
+    {
+      "id": "2024-llama-3-herd",
+      "date": "2024-07-23",
+      "entry_file": "2024-07-23_2024-llama-3-herd.md",
+      "absorbed_at": "2026-11-16T20:35:00",
+      "touched_articles": [
+        "Llama 3",
+        "Grouped-Query Attention (GQA)",
+        "Scaling Laws"
+      ]
+    },
+    {
+      "id": "plonkit-europe-guide",
+      "date": "2026-11-16",
+      "entry_file": "2026-11-16_plonkit-europe-guide.md",
+      "absorbed_at": "2026-11-16T20:55:00",
+      "touched_articles": [
+        "GeoGuessr 歐洲概覽速判 (Europe Overview)",
+        "歐洲車牌速判 (European License Plates)",
+        "歐洲防撞桿與基礎設施 (European Bollards and Poles)",
+        "歐洲街景車特徵 (European Street View Car Metas)"
+      ]
+    }
+  ],
+  "last_sync": "2026-11-16T20:55:27"
+}

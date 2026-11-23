@@ -1,0 +1,183 @@
+﻿{
+    "Grouped-Query Attention (GQA)":  [
+                                          "Multi-Head Latent Attention (MLA)",
+                                          "Llama 3"
+                                      ],
+    "Multi-Head Latent Attention (MLA)":  [
+                                              "DeepSeek-R1"
+                                          ],
+    "Autonomous Penetration Testing (自動化滲透測試)":  [
+
+                                                 ],
+    "Chain of Thought (CoT)":  [
+                                   "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+                                   "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+                                   "Self-Consistency (自我一致性)"
+                               ],
+    "Scaling Laws":  [
+                         "Test-Time Compute",
+                         "Llama 3",
+                         "Training language models to follow instructions with human feedback"
+                     ],
+    "Test-Time Compute":  [
+                              "Chain of Thought (CoT)",
+                              "Math Reasoning Benchmarks",
+                              "DeepSeek-R1",
+                              "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+                              "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+                              "Self-Consistency (自我一致性)"
+                          ],
+    "Exploit Success Rate and Reward Design (漏洞利用成功率與獎勵評估)":  [
+
+                                                              ],
+    "Math Reasoning Benchmarks":  [
+                                      "DeepSeek-R1",
+                                      "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+                                      "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models"
+                                  ],
+    "歐洲防撞桿與基礎設施 (European Bollards and Poles)":  [
+                                                     "GeoGuessr 歐洲概覽速判 (Europe Overview)"
+                                                 ],
+    "GeoGuessr 歐洲概覽速判 (Europe Overview)":  [
+
+                                           ],
+    "歐洲車牌速判 (European License Plates)":  [
+                                             "GeoGuessr 歐洲概覽速判 (Europe Overview)"
+                                         ],
+    "歐洲街景車特徵 (European Street View Car Metas)":  [
+                                                     "GeoGuessr 歐洲概覽速判 (Europe Overview)"
+                                                 ],
+    "DeepSeek-R1":  [
+
+                    ],
+    "Llama 3":  [
+                    "Grouped-Query Attention (GQA)",
+                    "Scaling Laws",
+                    "Math Reasoning Benchmarks"
+                ],
+    "Raiju 後滲透自動化框架 (Raiju Framework)":  [
+                                             "A2C 與 PPO 在滲透測試之對比 (A2C vs PPO in Pentesting)"
+                                         ],
+    "DeepSeek2025-R1: Incentivizing Reasoning Capability in LLMs via RL":  [
+                                                                               "Multi-Head Latent Attention (MLA)",
+                                                                               "Chain of Thought (CoT)",
+                                                                               "Test-Time Compute",
+                                                                               "Math Reasoning Benchmarks",
+                                                                               "Training language models to follow instructions with human feedback",
+                                                                               "Group Relative Policy Optimization (GRPO)",
+                                                                               "RLHF and PPO (人類回饋強化學習)"
+                                                                           ],
+    "Deng2023-PentestGPT: An LLM-powered Automated Penetration Testing Tool":  [
+                                                                                   "Autonomous Penetration Testing (自動化滲透測試)"
+                                                                               ],
+    "Microsoft2021-CyberBattleSim: Investigating Network Security via Reinforcement Learning":  [
+                                                                                                    "Autonomous Penetration Testing (自動化滲透測試)"
+                                                                                                ],
+    "Training language models to follow instructions with human feedback":  [
+
+                                                                            ],
+    "Pham2024-Raiju: RL-Guided Post-Exploitation for Automating Security Assessment":  [
+
+                                                                                       ],
+    "Schwartz2019-POMDPPenTest: Autonomous Penetration Testing Using RL and POMDPs":  [
+
+                                                                                      ],
+    "Takaesu2018-DeepExploit: Automated Penetration Testing Framework using Machine Learning":  [
+                                                                                                    "Autonomous Penetration Testing (自動化滲透測試)",
+                                                                                                    "Deng2023-PentestGPT: An LLM-powered Automated Penetration Testing Tool"
+                                                                                                ],
+    "Self-Consistency Improves Chain of Thought Reasoning in Language Models":  [
+
+                                                                                ],
+    "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models":  [
+
+                                                                              ],
+    "A2C 與 PPO 在滲透測試之對比 (A2C vs PPO in Pentesting)":  [
+                                                          "Raiju 後滲透自動化框架 (Raiju Framework)",
+                                                          "Takaesu2018-DeepExploit: Automated Penetration Testing Framework using Machine Learning"
+                                                      ],
+    "Group Relative Policy Optimization (GRPO)":  [
+                                                      "Test-Time Compute",
+                                                      "DeepSeek-R1",
+                                                      "RLHF and PPO (人類回饋強化學習)"
+                                                  ],
+    "LLM Security Agent (大語言模型安全智能體)":  [
+
+                                        ],
+    "POMDP in Cyber Operations (網絡攻防中的部分可觀察馬可夫決策過程)":  [
+
+                                                       ],
+    "RLHF and PPO (人類回饋強化學習)":  [
+
+                                ],
+    "Self-Consistency (自我一致性)":  [
+
+                                 ],
+    "Pham2024-Raiju.md":  [
+                              "Autonomous Penetration Testing (自動化滲透測試)",
+                              "Exploit Success Rate and Reward Design (漏洞利用成功率與獎勵評估)",
+                              "Deng2023-PentestGPT: An LLM-powered Automated Penetration Testing Tool",
+                              "Microsoft2021-CyberBattleSim: Investigating Network Security via Reinforcement Learning",
+                              "Schwartz2019-POMDPPenTest: Autonomous Penetration Testing Using RL and POMDPs",
+                              "Takaesu2018-DeepExploit: Automated Penetration Testing Framework using Machine Learning",
+                              "LLM Security Agent (大語言模型安全智能體)",
+                              "POMDP in Cyber Operations (網絡攻防中的部分可觀察馬可夫決策過程)"
+                          ],
+    "Deng2023-PentestGPT.md":  [
+                                   "Autonomous Penetration Testing (自動化滲透測試)",
+                                   "Microsoft2021-CyberBattleSim: Investigating Network Security via Reinforcement Learning",
+                                   "LLM Security Agent (大語言模型安全智能體)"
+                               ],
+    "Takaesu2018-DeepExploit.md":  [
+                                       "Autonomous Penetration Testing (自動化滲透測試)",
+                                       "Exploit Success Rate and Reward Design (漏洞利用成功率與獎勵評估)"
+                                   ],
+    "Microsoft2021-CyberBattleSim.md":  [
+                                            "Autonomous Penetration Testing (自動化滲透測試)",
+                                            "Exploit Success Rate and Reward Design (漏洞利用成功率與獎勵評估)",
+                                            "Schwartz2019-POMDPPenTest: Autonomous Penetration Testing Using RL and POMDPs",
+                                            "POMDP in Cyber Operations (網絡攻防中的部分可觀察馬可夫決策過程)"
+                                        ],
+    "Schwartz2019-POMDPPenTest.md":  [
+                                         "Autonomous Penetration Testing (自動化滲透測試)",
+                                         "POMDP in Cyber Operations (網絡攻防中的部分可觀察馬可夫決策過程)"
+                                     ],
+    "Wei2022-ChainOfThought: Chain-of-Thought Prompting Elicits Reasoning in Large Language Models":  [
+                                                                                                          "Chain of Thought (CoT)"
+                                                                                                      ],
+    "Self-Consistency":  [
+                             "Chain of Thought (CoT)",
+                             "Self-Consistency Improves Chain of Thought Reasoning in Language Models",
+                             "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models"
+                         ],
+    "DeepSeek-V3-Base":  [
+                             "DeepSeek-R1"
+                         ],
+    "Autonomous Penetration Testing":  [
+                                           "Deng2023-PentestGPT: An LLM-powered Automated Penetration Testing Tool",
+                                           "Microsoft2021-CyberBattleSim: Investigating Network Security via Reinforcement Learning",
+                                           "Schwartz2019-POMDPPenTest: Autonomous Penetration Testing Using RL and POMDPs",
+                                           "Takaesu2018-DeepExploit: Automated Penetration Testing Framework using Machine Learning",
+                                           "LLM Security Agent (大語言模型安全智能體)"
+                                       ],
+    "LLM Security Agent":  [
+                               "Deng2023-PentestGPT: An LLM-powered Automated Penetration Testing Tool"
+                           ],
+    "POMDP in Cyber Operations":  [
+                                      "Microsoft2021-CyberBattleSim: Investigating Network Security via Reinforcement Learning",
+                                      "Schwartz2019-POMDPPenTest: Autonomous Penetration Testing Using RL and POMDPs"
+                                  ],
+    "RLHF and PPO":  [
+                         "Training language models to follow instructions with human feedback"
+                     ],
+    "Actor-Critic and PPO":  [
+                                 "Training language models to follow instructions with human feedback",
+                                 "RLHF and PPO (人類回饋強化學習)"
+                             ],
+    "Ouyang2022-InstructGPT: Training language models to follow instructions with human feedback":  [
+                                                                                                        "RLHF and PPO (人類回饋強化學習)"
+                                                                                                    ],
+    "Wang2022-SelfConsistency: Self-Consistency Improves Chain of Thought Reasoning in Language Models":  [
+                                                                                                              "Self-Consistency (自我一致性)"
+                                                                                                          ]
+}

@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek-R1 推理機制與演算法演進 - 學術簡報</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+  <style>
+    :root {
+      --bg-canvas: #F1F5F9;
+      --bg-card: #FFFFFF;
+      --border-subtle: #E2E8F0;
+      --border-focus: #0284C7;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+      --text-accent: #0284C7;
+      --accent-teal: #0D9488;
+      --card-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
+      --font-serif: "Charter", "Georgia", "Cambria", "Times New Roman", serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #progress-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 4px;
+      background: #CBD5E1;
+      z-index: 100;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 12.5%;
+      background: var(--text-accent);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #deck-container {
+      width: 90vw;
+      max-width: 1200px;
+      height: 82vh;
+      max-height: 675px;
+      position: relative;
+      perspective: 1000px;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      padding: 44px 52px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px) scale(0.99);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+      z-index: 10;
+    }
+
+    .slide-header {
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .slide-category {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-accent);
+      margin-bottom: 4px;
+    }
+    .slide-title {
+      font-family: var(--font-serif);
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+    .slide-badge {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 1.1rem;
+      line-height: 1.6;
+      color: #334155;
+    }
+    .bullet-item::before {
+      content: "•";
+      color: var(--text-accent);
+      font-size: 1.4rem;
+      line-height: 1.2;
+    }
+    .bullet-item strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+    }
+    .card {
+      background: #F8FAFC;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-title {
+      font-family: var(--font-serif);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title::before {
+      content: "";
+      width: 4px;
+      height: 16px;
+      background: var(--text-accent);
+      border-radius: 2px;
+    }
+
+    .academic-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+      margin-top: 6px;
+    }
+    .academic-table th {
+      background: #F1F5F9;
+      color: var(--text-main);
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 14px;
+      border-top: 2px solid #0F172A;
+      border-bottom: 1px solid #CBD5E1;
+    }
+    .academic-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: #334155;
+    }
+    .academic-table tr:last-child td {
+      border-bottom: 2px solid #0F172A;
+    }
+
+    .formula-box {
+      background: #F8FAFC;
+      border-left: 4px solid var(--text-accent);
+      padding: 16px 20px;
+      border-radius: 4px 8px 8px 4px;
+      font-size: 1.15rem;
+      overflow-x: auto;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+    }
+    .metric-card {
+      flex: 1;
+      background: #F8FAFC;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+    }
+    .metric-val {
+      font-family: var(--font-serif);
+      font-size: 2.6rem;
+      font-weight: 800;
+      color: var(--text-accent);
+      line-height: 1.1;
+    }
+    .metric-lbl {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 600;
+    }
+
+    .paper-link-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
+      border-radius: 8px;
+      padding: 12px 18px;
+      text-decoration: none;
+      color: var(--text-main);
+      transition: all 0.2s;
+    }
+    .paper-link-card:hover {
+      border-color: var(--text-accent);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.1);
+    }
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #E0F2FE;
+      color: var(--text-accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+
+    .slide-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    #nav-bar {
+      position: fixed;
+      bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 30px;
+      padding: 8px 18px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      z-index: 100;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 20px;
+      transition: background 0.2s;
+    }
+    .nav-btn:hover {
+      background: #F1F5F9;
+      color: var(--text-accent);
+    }
+    .page-indicator {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      min-width: 65px;
+      text-align: center;
+    }
+
+    #speaker-notes-panel {
+      position: fixed;
+      bottom: 70px;
+      width: 90vw;
+      max-width: 1200px;
+      max-height: 200px;
+      background: #1E293B;
+      color: #F8FAFC;
+      border-radius: 12px;
+      padding: 16px 24px;
+      box-shadow: 0 -8px 24px rgba(0,0,0,0.15);
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 200;
+      overflow-y: auto;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    #speaker-notes-panel.active {
+      display: flex;
+    }
+    .notes-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #94A3B8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="progress-container">
+    <div id="progress-bar"></div>
+  </div>
+
+  <div id="deck-container">
+
+    <!-- SLIDE 1 -->
+    <div class="slide active" data-slide="1">
+      <div style="height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 18px;">
+        <span class="slide-badge" style="background: #E0F2FE; color: #0369A1; border-color: #BAE6FD;">RESEARCH PRESENTATION • WIKI GROUNDED</span>
+        <h1 style="font-family: var(--font-serif); font-size: 2.8rem; font-weight: 800; color: #0F172A; max-width: 900px; line-height: 1.15;">
+          DeepSeek-R1 推理機制與演算法演進
+        </h1>
+        <p style="font-size: 1.25rem; color: #475569; max-width: 750px; line-height: 1.5;">
+          從 GRPO 策略優化到測試期計算量擴展 (Test-Time Compute) 的範式突破
+        </p>
+        <div style="margin-top: 18px; display: flex; gap: 20px; font-size: 0.95rem; color: #64748B;">
+          <span>文獻收錄：<strong>Personal Wiki</strong></span>
+          <span>•</span>
+          <span>日期：<strong>2026-11-23</strong></span>
+          <span>•</span>
+          <span>風格：<strong>簡約學術白底風</strong></span>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>按 <code>Space</code> 或 <code>→</code> 進入下一頁</span>
+        <span>按 <code>P</code> 開啟講者備忘錄</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        各位好，今天我們探討大語言模型在推理架構上的最新演進。聚焦於 DeepSeek-R1 如何突破傳統 SFT 冷啟動限制，透過純強化學習與 GRPO 演算法，在數學與邏輯任務上激發出自發性反思與長思維鏈。
+      </div>
+    </div>
+
+    <!-- SLIDE 2 -->
+    <div class="slide" data-slide="2">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">PARADIGM SHIFT</div>
+          <h2 class="slide-title">範式轉移：大模型算力配置的新維度</h2>
+        </div>
+        <span class="slide-badge">[[Test-Time Compute]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">經典預訓練擴展 (Pre-training Scaling)</div>
+            <ul class="bullet-list">
+              <li class="bullet-item">依循 Kaplan 與 Chinchilla 比例定律：$C \approx 6ND$。</li>
+              <li class="bullet-item">算力重度押注於擴大模型參數 $N$ 與資料量 $D$。</li>
+              <li class="bullet-item"><strong>面臨瓶頸</strong>：公開高質量人類文字資料庫存即將耗盡。</li>
+            </ul>
+          </div>
+          <div class="card" style="border-color: #BAE6FD; background: #F0F9FF;">
+            <div class="card-title" style="color: #0369A1;">測試期計算量擴展 (Test-Time Compute)</div>
+            <ul class="bullet-list">
+              <li class="bullet-item">將運算資源自「靜態預訓練」轉移至「動態推論期」。</li>
+              <li class="bullet-item">給予模型充足的思考 Token，進行分支探索與回溯。</li>
+              <li class="bullet-item"><strong>核心收益</strong>：在固定參數下實現複雜任務的非線性精度躍升。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Scaling Laws]], [[Test-Time Compute]]</span>
+        <span>Slide 2 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        過去幾年整個 AI 領域都在追逐預訓練參數量與資料規模。但到了 2024–2025 年，高質量人類語料即將耗盡。新的戰場轉移到了測試期計算量：讓模型學會「深思熟慮」，在輸出前自發探索替代路徑。
+      </div>
+    </div>
+
+    <!-- SLIDE 3 -->
+    <div class="slide" data-slide="3">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">EMERGENCE PHENOMENON</div>
+          <h2 class="slide-title">DeepSeek-R1-Zero：無冷啟動的純強化學習</h2>
+        </div>
+        <span class="slide-badge">[[DeepSeek-R1]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div>
+            <ul class="bullet-list">
+              <li class="bullet-item"><strong>零 SFT 冷啟動示範</strong>：直接在 <code>DeepSeek-V3-Base</code> 上套用純 RL 訓練。</li>
+              <li class="bullet-item"><strong>客觀規則獎勵驅動</strong>：
+                <br>• 正確性獎勵（數學/程式碼確定性結果判定 $0/1$）
+                <br>• 格式約束（強制封裝於 <code>&lt;think&gt;...&lt;/think&gt;</code> 標籤）
+              </li>
+              <li class="bullet-item"><strong>自主湧現人類認知特徵</strong>：隨訓練推進，思考長度指數級增長，自發性出現回溯與重新審視。</li>
+            </ul>
+          </div>
+          <div class="card" style="justify-content: center; background: #FAF5FF; border-color: #E9D5FF;">
+            <div style="font-size: 0.85rem; font-weight: 700; color: #7E22CE; text-transform: uppercase;">自發反思湧現實例</div>
+            <blockquote style="font-family: var(--font-serif); font-size: 1.15rem; color: #581C87; line-height: 1.6; font-style: italic;">
+              "Wait, wait, wait... let me reconsider this equation. My previous step assumed $x > 0$, but the problem didn't specify. Let me check the negative domain..."
+            </blockquote>
+            <div style="font-size: 0.85rem; color: #6B21A8; font-weight: 600;">—— 完全由規則獎勵驅動湧現，無人類標註教導</div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[DeepSeek-R1]], [[Group Relative Policy Optimization (GRPO)]]</span>
+        <span>Slide 3 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        R1-Zero 最震撼學界的地方，在於它完全沒有使用任何人寫的 CoT 示範。僅僅給予客觀的對錯獎勵，模型在 RL 訓練中就自己學會了懷疑自己的前一步、自發拉長思考鏈，證明了長推理能力是底座模型的內在潛力。
+      </div>
+    </div>
+
+    <!-- SLIDE 4 -->
+    <div class="slide" data-slide="4">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">ALGORITHM DESIGN</div>
+          <h2 class="slide-title">Group Relative Policy Optimization (GRPO)</h2>
+        </div>
+        <span class="slide-badge">[[GRPO]]</span>
+      </div>
+      <div class="slide-body">
+        <ul class="bullet-list">
+          <li class="bullet-item"><strong>Critic-Free 記憶體革命</strong>：徹底拔除 PPO 的 Critic（價值評估網絡），節省 40%–50% 顯存開銷。</li>
+          <li class="bullet-item"><strong>群組取樣與相對優勢歸一化</strong>：針對問題 $q$ 取樣一組 $G$ 個輸出，計算相對優勢：</li>
+        </ul>
+        <div class="formula-box">
+          $$A_i = \frac{r_i - \mu}{\sigma}, \quad \text{其中 } \mu = \frac{1}{G}\sum_{j=1}^G r_j, \quad \sigma = \sqrt{\frac{1}{G}\sum_{j=1}^G (r_j - \mu)^2}$$
+        </div>
+        <div class="formula-box" style="border-left-color: var(--accent-teal);">
+          $$\mathcal{J}_{GRPO}(\theta) = \mathbb{E} \left[ \frac{1}{G} \sum_{i=1}^G \left( \min\left( \frac{\pi_\theta(o_i|q)}{\pi_{old}(o_i|q)} A_i, \text{clip}\left(\frac{\pi_\theta(o_i|q)}{\pi_{old}(o_i|q)}, 1\pm\epsilon\right) A_i \right) - \beta \mathbb{D}_{KL} \right) \right]$$
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Group Relative Policy Optimization (GRPO)]]</span>
+        <span>Slide 4 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        PPO 最大的痛點是 Critic 網絡。在大模型上，Critic 不僅吃掉大量顯存，還經常訓練不穩。GRPO 的智慧在於：既然生成了多個回答，直接用這群回答的相對高低分當作 Baseline，數學優雅且大幅提升系統吞吐量。
+      </div>
+    </div>
+
+    <!-- SLIDE 5 -->
+    <div class="slide" data-slide="5">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">ALGORITHM COMPARISON</div>
+          <h2 class="slide-title">策略優化演算法橫向對比</h2>
+        </div>
+        <span class="slide-badge">PPO vs DPO vs GRPO</span>
+      </div>
+      <div class="slide-body">
+        <table class="academic-table">
+          <thead>
+            <tr>
+              <th>比較維度</th>
+              <th>PPO (近端策略優化)</th>
+              <th>DPO (直接偏好優化)</th>
+              <th>GRPO (DeepSeek 策略)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Critic 網絡需求</strong></td>
+              <td>需要 (與 Actor 同等規模)</td>
+              <td>無需獨立網絡</td>
+              <td><strong>完全無需 (群組 Baseline)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>訓練顯存消耗</strong></td>
+              <td>極高 (需常駐 4 個大模型)</td>
+              <td>低 (離線成對資料)</td>
+              <td><strong>極低 (僅 Actor + Ref)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>線上探索能力</strong></td>
+              <td>強 (動態在線取樣)</td>
+              <td>弱 (受限於靜態偏好對)</td>
+              <td><strong>極強 (適配長思維鏈動態探索)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>主要適用領域</strong></td>
+              <td>人類主觀對齊、安全審查</td>
+              <td>通用對話指令微調</td>
+              <td><strong>客觀數學推導、程式碼長推理</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="slide-footer">
+        <span>演算法對比來源於知識庫文獻綜述</span>
+        <span>Slide 5 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        這張對比表清晰說明了為什麼推理模型選擇 GRPO 而非 DPO。DPO 只能在靜態的成對資料中微調，無法自主探索未知的思考路徑；而 PPO 又太過沉重。GRPO 兼取兩者長處。
+      </div>
+    </div>
+
+    <!-- SLIDE 6 -->
+    <div class="slide" data-slide="6">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">ARCHITECTURE CO-DESIGN</div>
+          <h2 class="slide-title">Multi-Head Latent Attention (MLA)</h2>
+        </div>
+        <span class="slide-badge">[[MLA]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">長序列 KV Cache 瓶頸</div>
+            <ul class="bullet-list">
+              <li class="bullet-item">長思考鏈動輒產生 10,000+ Tokens，KV Cache 線性暴增。</li>
+              <li class="bullet-item">傳統 MHA 導致 GPU 記憶體頻寬（Memory Bandwidth）嚴重飽和。</li>
+              <li class="bullet-item">[[Grouped-Query Attention (GQA)]] 雖縮減頭數，但犧牲了鍵值空間容量。</li>
+            </ul>
+          </div>
+          <div class="card" style="border-color: #CCFBF1; background: #F0FDFA;">
+            <div class="card-title" style="color: #0F766E;">MLA 的低秩聯合壓縮</div>
+            <ul class="bullet-list">
+              <li class="bullet-item"><strong>低維潛在投影</strong>：推論時僅需快取壓縮後的低維潛在向量 $c^{KV}$。</li>
+              <li class="bullet-item"><strong>解耦式 RoPE 策略</strong>：將內容特徵與旋轉位置向量解耦，推論矩陣可吸收合併。</li>
+              <li class="bullet-item"><strong>結論</strong>：達成比 GQA 更極致的顯存壓縮，同時保留完整 MHA 的表達力。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Multi-Head Latent Attention (MLA)]], [[Grouped-Query Attention (GQA)]]</span>
+        <span>Slide 6 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        長思考模型不能只看演算法，如果底層架構沒跟上，推論時顯存瞬間爆發。DeepSeek 透過 MLA 將 KV Cache 壓縮到極致，才使得數萬 Token 的長思維鏈推論具備實際量產的性價比。
+      </div>
+    </div>
+
+    <!-- SLIDE 7 -->
+    <div class="slide" data-slide="7">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">BENCHMARKS & DISTILLATION</div>
+          <h2 class="slide-title">權威評測突破與知識蒸餾躍遷</h2>
+        </div>
+        <span class="slide-badge">[[Math Reasoning Benchmarks]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-val">79.8%</div>
+            <div class="metric-lbl">AIME 2024 Pass@1 (Cons@64 達 92.3%)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val">97.3%</div>
+            <div class="metric-lbl">MATH-500 基準測試 Pass@1</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val">72.6%</div>
+            <div class="metric-lbl">蒸餾至 Qwen-32B 密集模型之 AIME 表現</div>
+          </div>
+        </div>
+        <div class="card" style="margin-top: 8px;">
+          <div class="card-title">知識蒸餾核心啟示</div>
+          <p style="font-size: 1.05rem; line-height: 1.6; color: #334155;">
+            利用 DeepSeek-R1 產生的 80 萬條高質量長思考鏈資料，直接對稠密小模型（如 Qwen-2.5-32B、Llama-3.1-70B）進行微調，其推理性能遠勝於直接在小模型上進行強化學習。<strong>證明長思維鏈反思能力具備高度可遷移性。</strong>
+          </p>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[DeepSeek-R1]], [[Math Reasoning Benchmarks]]</span>
+        <span>Slide 7 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        在 AIME 2024 等權威競賽中，R1 達成了與閉源頂級模型 o1 相同的水平。更重要的是最後一項蒸餾實驗：小模型自己做 RL 做不出來的高階反思，透過大模型產生的優質思考軌跡微調，竟然能學會 90% 以上的能力。
+      </div>
+    </div>
+
+    <!-- SLIDE 8 -->
+    <div class="slide" data-slide="8">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">SUMMARY & EXTENSION</div>
+          <h2 class="slide-title">總結與建議待收錄文獻</h2>
+        </div>
+        <span class="slide-badge">Wiki Ingestion Backlog</span>
+      </div>
+      <div class="slide-body">
+        <div style="font-size: 1rem; color: #475569; margin-bottom: 8px;">
+          <strong>Wiki 正文結論</strong>：純 RL + GRPO + MLA 構築了當代最精練的長推理模型閉環。以下文獻已完成學術檢索，點擊即可直接下載 PDF，啟動下一輪 Wiki 吸收：
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2501.12948" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">DeepSeek-R1: Incentivizing Reasoning Capability via RL</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2501.12948 • 完整四階段訓練管線與冷啟動細節</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2412.19437" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">DeepSeek-V3 Technical Report</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2412.19437 • MLA 數學推導與 MoE 負載均衡底座</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2408.03314" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">Scaling LLM Test-Time Compute Optimally</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2408.03314 • 推理期計算自適應分配演算法驗證</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>點擊論文可啟動下一次 /wiki ingest 流程</span>
+        <span>Slide 8 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        最後為大家總結本講的核心洞察。文末列出的 3 篇核心論文已附上官方下載 PDF 連結，隨後可直接匯入我們的知識庫執行進一步的細節編譯。感謝大家！
+      </div>
+    </div>
+
+  </div>
+
+  <div id="speaker-notes-panel">
+    <div class="notes-header">
+      <span>SPEAKER NOTES (講者備忘錄 - 按 P 鍵開關)</span>
+      <span id="notes-slide-id">SLIDE 1</span>
+    </div>
+    <div id="notes-body" style="color: #E2E8F0;">
+      載入講者備忘錄...
+    </div>
+  </div>
+
+  <div id="nav-bar">
+    <button class="nav-btn" onclick="prevSlide()" title="上一頁 (←)">‹</button>
+    <div class="page-indicator" id="page-indicator">1 / 8</div>
+    <button class="nav-btn" onclick="nextSlide()" title="下一頁 (→ / Space)">›</button>
+    <div style="width: 1px; height: 16px; background: #E2E8F0;"></div>
+    <button class="nav-btn" onclick="toggleNotes()" title="講者備忘錄 (P)">📝 講稿</button>
+    <button class="nav-btn" onclick="toggleFullscreen()" title="全螢幕演示 (F)">⛶ 全螢幕</button>
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 8;
+    const slides = document.querySelectorAll('.slide');
+    const progressBar = document.getElementById('progress-bar');
+    const pageIndicator = document.getElementById('page-indicator');
+    const speakerPanel = document.getElementById('speaker-notes-panel');
+    const notesBody = document.getElementById('notes-body');
+    const notesSlideId = document.getElementById('notes-slide-id');
+
+    function updateSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      slides.forEach(s => {
+        const slideNum = parseInt(s.getAttribute('data-slide'));
+        if (slideNum === currentSlide) {
+          s.classList.add('active');
+          const notesText = s.querySelector('.speaker-notes-content').innerHTML;
+          notesBody.innerHTML = notesText;
+          notesSlideId.textContent = `SLIDE ${currentSlide} / ${totalSlides}`;
+        } else {
+          s.classList.remove('active');
+        }
+      });
+
+      progressBar.style.width = (currentSlide / totalSlides * 100) + '%';
+      pageIndicator.textContent = `${currentSlide} / ${totalSlides}`;
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) updateSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) updateSlide(currentSlide - 1);
+    }
+
+    function toggleNotes() {
+      speakerPanel.classList.toggle('active');
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'Backspace') {
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      } else if (e.key === 'p' || e.key === 'P') {
+        toggleNotes();
+      } else if (e.key === 'Home') {
+        updateSlide(1);
+      } else if (e.key === 'End') {
+        updateSlide(totalSlides);
+      }
+    });
+
+    updateSlide(1);
+  </script>
+</body>
+</html>

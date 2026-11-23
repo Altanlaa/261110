@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM 在教學上的運用問題與技術挑戰 - 學術簡報</title>
+  <!-- KaTeX CSS & JS for LaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+  <style>
+    :root {
+      --bg-canvas: #F1F5F9;
+      --bg-card: #FFFFFF;
+      --border-subtle: #E2E8F0;
+      --border-focus: #0284C7;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+      --text-accent: #0284C7;
+      --accent-teal: #0D9488;
+      --card-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
+      --font-serif: "Charter", "Georgia", "Cambria", "Times New Roman", serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #progress-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 4px;
+      background: #CBD5E1;
+      z-index: 100;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 12.5%;
+      background: var(--text-accent);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #deck-container {
+      width: 90vw;
+      max-width: 1200px;
+      height: 82vh;
+      max-height: 675px;
+      position: relative;
+      perspective: 1000px;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      padding: 44px 52px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px) scale(0.99);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+      z-index: 10;
+    }
+
+    .slide-header {
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .slide-category {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-accent);
+      margin-bottom: 4px;
+    }
+    .slide-title {
+      font-family: var(--font-serif);
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+    .slide-badge {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 1.1rem;
+      line-height: 1.6;
+      color: #334155;
+    }
+    .bullet-item::before {
+      content: "•";
+      color: var(--text-accent);
+      font-size: 1.4rem;
+      line-height: 1.2;
+    }
+    .bullet-item strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+    }
+    .card {
+      background: #F8FAFC;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-title {
+      font-family: var(--font-serif);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title::before {
+      content: "";
+      width: 4px;
+      height: 16px;
+      background: var(--text-accent);
+      border-radius: 2px;
+    }
+
+    .academic-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+      margin-top: 6px;
+    }
+    .academic-table th {
+      background: #F1F5F9;
+      color: var(--text-main);
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 14px;
+      border-top: 2px solid #0F172A;
+      border-bottom: 1px solid #CBD5E1;
+    }
+    .academic-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: #334155;
+    }
+    .academic-table tr:last-child td {
+      border-bottom: 2px solid #0F172A;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+    }
+    .metric-card {
+      flex: 1;
+      background: #F8FAFC;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+    }
+    .metric-val {
+      font-family: var(--font-serif);
+      font-size: 2.6rem;
+      font-weight: 800;
+      color: var(--text-accent);
+      line-height: 1.1;
+    }
+    .metric-lbl {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 600;
+    }
+
+    .paper-link-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
+      border-radius: 8px;
+      padding: 12px 18px;
+      text-decoration: none;
+      color: var(--text-main);
+      transition: all 0.2s;
+    }
+    .paper-link-card:hover {
+      border-color: var(--text-accent);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.1);
+    }
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #E0F2FE;
+      color: var(--text-accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+
+    .slide-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    #nav-bar {
+      position: fixed;
+      bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 30px;
+      padding: 8px 18px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      z-index: 100;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 20px;
+      transition: background 0.2s;
+    }
+    .nav-btn:hover {
+      background: #F1F5F9;
+      color: var(--text-accent);
+    }
+    .page-indicator {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      min-width: 65px;
+      text-align: center;
+    }
+
+    #speaker-notes-panel {
+      position: fixed;
+      bottom: 70px;
+      width: 90vw;
+      max-width: 1200px;
+      max-height: 200px;
+      background: #1E293B;
+      color: #F8FAFC;
+      border-radius: 12px;
+      padding: 16px 24px;
+      box-shadow: 0 -8px 24px rgba(0,0,0,0.15);
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 200;
+      overflow-y: auto;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    #speaker-notes-panel.active {
+      display: flex;
+    }
+    .notes-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #94A3B8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="progress-container">
+    <div id="progress-bar"></div>
+  </div>
+
+  <div id="deck-container">
+
+    <!-- SLIDE 1: 封面 -->
+    <div class="slide active" data-slide="1">
+      <div style="height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 18px;">
+        <span class="slide-badge" style="background: #FEF3C7; color: #B45309; border-color: #FDE68A;">EDUCATIONAL CHALLENGES • WIKI GROUNDED</span>
+        <h1 style="font-family: var(--font-serif); font-size: 2.7rem; font-weight: 800; color: #0F172A; max-width: 900px; line-height: 1.15;">
+          LLM 在教學上的運用問題與技術瓶頸
+        </h1>
+        <p style="font-size: 1.25rem; color: #475569; max-width: 750px; line-height: 1.5;">
+          從推理可靠性、Reasoning Tax 到蘇格拉底式引導教學的架構落差
+        </p>
+        <div style="margin-top: 18px; display: flex; gap: 20px; font-size: 0.95rem; color: #64748B;">
+          <span>研討主題：<strong>教育科技與大語言模型</strong></span>
+          <span>•</span>
+          <span>文獻收錄：<strong>Personal Wiki</strong></span>
+          <span>•</span>
+          <span>風格：<strong>簡約學術白底風</strong></span>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>按 <code>Space</code> 或 <code>→</code> 進入下一頁</span>
+        <span>按 <code>P</code> 開啟講者備忘錄</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        各位好，今天我們探討大語言模型導入教學應用時面臨的深層技術挑戰。我們將結合 Wiki 庫中的最新模型機制與評測數據，剖析為何「會解題的 AI」並不等同於「會教學的好老師」。
+      </div>
+    </div>
+
+    <!-- SLIDE 2: 核心範式衝突 -->
+    <div class="slide" data-slide="2">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">PARADIGM CONFLICT</div>
+          <h2 class="slide-title">教學範式衝突：直接解答 vs. 認知鷹架</h2>
+        </div>
+        <span class="slide-badge">[[DeepSeek-R1]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">LLM 核心優化目標</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item">依據 [[DeepSeek-R1]] 訓練目標，模型旨在最大化單次輸出的正確率與長思維鏈 (Long CoT)。</li>
+              <li class="bullet-item">傾向於「一口氣傾瀉」完整的解題推導與最終解答。</li>
+              <li class="bullet-item"><strong>後果</strong>：剝奪了學生嘗試試錯與思考的空間。</li>
+            </ul>
+          </div>
+          <div class="card" style="border-color: #BAE6FD; background: #F0F9FF;">
+            <div class="card-title" style="color: #0369A1;">教育學核心原則 (Scaffolding)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item">蘇格拉底式引導教學（Socratic Tutoring）：重在提問而非解答。</li>
+              <li class="bullet-item">在關鍵節點給予階梯式提示 (Hints)，引導學生自主發現矛盾。</li>
+              <li class="bullet-item"><strong>教學痛點</strong>：現有 LLM 容易助長學生的「表面學習」與認知依賴。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[DeepSeek-R1]], [[DeepSeek2025-R1: Incentivizing Reasoning Capability in LLMs via RL]]</span>
+        <span>Slide 2 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        當前所有強大的推理模型，其訓練目標都是以最短路徑直接給出答案。但在教學中，直接給答案往往是破壞學習動機的罪魁禍首。學生缺乏自己碰撞、試錯的過程，形成了嚴重的認知依賴。
+      </div>
+    </div>
+
+    <!-- SLIDE 3: 推理可靠性與誤差 -->
+    <div class="slide" data-slide="3">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">RELIABILITY RISK</div>
+          <h2 class="slide-title">推理可靠性：Pass@1 誤差在教學中的放大</h2>
+        </div>
+        <span class="slide-badge">[[Math Reasoning Benchmarks]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-val">>95%</div>
+            <div class="metric-lbl">小學數學 GSM8K (已趨於飽和)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val">79.8%</div>
+            <div class="metric-lbl">競賽級 AIME 2024 Pass@1 (仍有 20% 錯誤率)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val">92.3%</div>
+            <div class="metric-lbl">Cons@64 (採樣 64 次表決，課堂無法即時實施)</div>
+          </div>
+        </div>
+        <div class="card" style="margin-top: 6px; background: #FFFBEB; border-color: #FDE68A;">
+          <strong style="color: #B45309;">權威口吻下的幻覺誤導：</strong>
+          <span style="color: #78350F; font-size: 0.95rem;">
+            依據 [[Math Reasoning Benchmarks]]，即使前沿模型在複雜難題上每 5 題仍可能答錯 1 題。LLM 能以極度自信且看似嚴密的語言給出錯誤公式推導，缺乏辨別能力的學習者極易被權威幻覺誤導。
+          </span>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Math Reasoning Benchmarks]], [[DeepSeek-R1]]</span>
+        <span>Slide 3 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        評測數據看起來很漂亮，但請大家注意：Pass@1 達到 80%，意味著每 5 題就有 1 題出錯。如果沒有專業老師把關，學生很容易把 AI 自信給出的錯誤公式當作真理記下來，形成難以糾正的認知盲點。
+      </div>
+    </div>
+
+    <!-- SLIDE 4: Reasoning Tax 與推論延遲 -->
+    <div class="slide" data-slide="4">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">INTERACTION BARRIER</div>
+          <h2 class="slide-title">Reasoning Tax：長思考鏈帶來的互動障礙</h2>
+        </div>
+        <span class="slide-badge">[[Test-Time Compute]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">推論延遲破壞心流 (Latency)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item">依據 [[Test-Time Compute]]，長思維鏈生成數千個 <code>&lt;think&gt;</code> Token，等待耗時達 30–60 秒。</li>
+              <li class="bullet-item">課堂問答需要「微步反饋與即時對話」，過長延遲直接切斷學生的注意力心流。</li>
+            </ul>
+          </div>
+          <div class="card" style="border-color: #FED7AA; background: #FFF7ED;">
+            <div class="card-title" style="color: #C2410C;">過度思考增加認知負荷 (Over-thinking)</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item">長思考模型面對基礎概念提問時，仍自發做多輪回溯與冗長推導。</li>
+              <li class="bullet-item">輸出的解釋往往層層堆疊，超出初學者的認知容量，違反循序漸進的教育原理。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Test-Time Compute]], [[DeepSeek-R1]]</span>
+        <span>Slide 4 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        測試期計算量的延伸讓模型在後台深思熟慮，但教學現場講究的是眼神交流與快速的啟發式問答。讓學生盯著旋轉游標等待 40 秒，對注意力本就有限的學習者來說是一大災難。
+      </div>
+    </div>
+
+    <!-- SLIDE 5: 軟性學科之評估困境 -->
+    <div class="slide" data-slide="5">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">EVALUATION DILEMMA</div>
+          <h2 class="slide-title">軟性學科評估困境：缺乏客觀確定性驗證器</h2>
+        </div>
+        <span class="slide-badge">Accuracy Reward Failure</span>
+      </div>
+      <div class="slide-body">
+        <table class="academic-table">
+          <thead>
+            <tr>
+              <th>學科性質</th>
+              <th>驗證機制 (Verifier)</th>
+              <th>強化學習適用性</th>
+              <th>教學導入挑戰</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>硬性數理與程式</strong><br>(Math / Coding)</td>
+              <td>編譯器、符號單元測試、精確答案匹配 ($0/1$)</td>
+              <td><strong>極高 (可使用 GRPO 訓練)</strong></td>
+              <td>直接給解答，缺乏引導式啟發</td>
+            </tr>
+            <tr>
+              <td><strong>軟性人文與語言</strong><br>(Writing / Literature)</td>
+              <td>缺乏單一客觀真值 (Ground Truth)</td>
+              <td><strong>低 (容易陷入 Reward Hacking)</strong></td>
+              <td>產生華麗但空泛的陳腔濫調，無法診斷邏輯深度</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size: 0.9rem; color: #64748B; margin-top: 6px;">
+          *依據 [[DeepSeek2025-R1: Incentivizing Reasoning Capability in LLMs via RL]]，確定性驗證是純 RL 成功的必要前提。
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[DeepSeek-R1]], [[Group Relative Policy Optimization (GRPO)]]</span>
+        <span>Slide 5 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        強化學習之所以能教模型做數學，是因為有編譯器和客觀標準答案。但語文寫作、閱讀理解有標準答案嗎？沒有。目前模型在非數理的軟性學科中，往往只會堆砌排比句，缺乏實質的批判性診斷。
+      </div>
+    </div>
+
+    <!-- SLIDE 6: 資料污染與評量失效 -->
+    <div class="slide" data-slide="6">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">CONTAMINATION ISSUE</div>
+          <h2 class="slide-title">資料污染 (Data Contamination) 與評量失真</h2>
+        </div>
+        <span class="slide-badge">[[Scaling Laws]]</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">預訓練語料的記憶假象</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item">依據 [[Scaling Laws]]，預訓練資料達數十兆 Tokens，歷屆公開考古題與經典課本早已滲入。</li>
+              <li class="bullet-item">高分可能源於「模式記憶（Memorization）」而非真正的推理遷移能力。</li>
+            </ul>
+          </div>
+          <div class="card" style="background: #FEF2F2; border-color: #FECACA;">
+            <div class="card-title" style="color: #991B1B;">傳統作業機制的崩解</div>
+            <ul class="bullet-list" style="font-size: 0.95rem;">
+              <li class="bullet-item">學生使用 AI 完成課後作業，老師無法區分是「真懂」還是「AI 代筆」。</li>
+              <li class="bullet-item">傳統以結果為導向的評分機制失效，迫使教育端重構評量方式。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>關聯詞條：[[Scaling Laws]], [[Math Reasoning Benchmarks]]</span>
+        <span>Slide 6 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        另一個致命傷是資料污染。網路上所有經典考題早就在模型肚子裡了。學生拿題目去問，AI 其實是在「背答案」，而不是在現場推理。這讓老師出的作業完全失去了診斷學生懂不懂的功能。
+      </div>
+    </div>
+
+    <!-- SLIDE 7: 技術應對策略 -->
+    <div class="slide" data-slide="7">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">TECHNICAL SOLUTIONS</div>
+          <h2 class="slide-title">技術突破方向：教學專用架構構想</h2>
+        </div>
+        <span class="slide-badge">Educational Scaffolding</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-title">1. 提示層抑制</div>
+            <p style="font-size: 0.95rem; color: #475569; line-height: 1.5;">透過 Prompt 與模型約束，強制「禁止輸出最終答案」，僅提供概念階梯提示 (Hints)。</p>
+          </div>
+          <div class="card">
+            <div class="card-title">2. 過程驗證 (PRM)</div>
+            <p style="font-size: 0.95rem; color: #475569; line-height: 1.5;">導入 Process Reward Model，對學生推導的每一個中間步驟進行診斷反饋，而非僅以對錯評判。</p>
+          </div>
+          <div class="card">
+            <div class="card-title">3. 分流推論架構</div>
+            <p style="font-size: 0.95rem; color: #475569; line-height: 1.5;">基礎觀念調用蒸餾小模型（低延遲 <1s），遇到高難度邏輯難題才切換至長思考模型。</p>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>技術架構由既有模型機制推導</span>
+        <span>Slide 7 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        要解決這些問題，技術上必須給 AI 戴上「緊箍咒」：第一，用 Prompt 或微調強制它「打死不能直接講答案」；第二，導入過程評估模型，像好家教一樣，只在學生卡關的地方輕輕推一把。
+      </div>
+    </div>
+
+    <!-- SLIDE 8: 總結與下載 -->
+    <div class="slide" data-slide="8">
+      <div class="slide-header">
+        <div>
+          <div class="slide-category">SUMMARY & DOWNLOADS</div>
+          <h2 class="slide-title">總結與建議待收錄教育文獻</h2>
+        </div>
+        <span class="slide-badge">Pending Ingestion</span>
+      </div>
+      <div class="slide-body">
+        <div style="font-size: 0.95rem; color: #475569; margin-bottom: 6px;">
+          <strong>核心結論</strong>：生成目標衝突、可靠性誤差、Reasoning 延遲與缺乏確定性驗證，構成了教育導入的四大鴻溝。點擊以下文獻直接下載 PDF 納入 Wiki：
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2405.13001" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">Large Language Models for Education: A Survey</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2405.13001 • 全面綜述 LLM 在教學、評量與隱私倫理之挑戰</div>
+            </div>
+            <span class="download-btn">📥 下載論文</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2507.22753" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">Opportunities and Challenges of LLMs in Education: NLP View</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2507.22753 • 從 NLP 視角剖析教學對話與智慧導師的技術瓶頸</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+          <a class="paper-link-card" href="https://arxiv.org/pdf/2312.14969" target="_blank">
+            <div>
+              <div style="font-weight: 700; color: #0F172A;">Challenges and Opportunities of Moderating Usage in Education</div>
+              <div style="font-size: 0.85rem; color: #64748B;">arXiv:2312.14969 • 人機互動 (HCI) 實證：學生使用習慣與提示引導</div>
+            </div>
+            <span class="download-btn">📥 下載 PDF</span>
+          </a>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>文獻點擊可無縫串接 /wiki ingest 流程</span>
+        <span>Slide 8 / 8</span>
+      </div>
+      <div class="speaker-notes-content" style="display:none;">
+        總結來說，AI 在教學上最大的價值不是當「解題槍手」，而是如何演進為「能引導自主思考的對話者」。文末收錄的 3 篇頂級教育文獻已附上下載連結，可隨後納入知識庫深度分析。感謝大家！
+      </div>
+    </div>
+
+  </div>
+
+  <div id="speaker-notes-panel">
+    <div class="notes-header">
+      <span>SPEAKER NOTES (講者備忘錄 - 按 P 鍵開關)</span>
+      <span id="notes-slide-id">SLIDE 1</span>
+    </div>
+    <div id="notes-body" style="color: #E2E8F0;">
+      載入講者備忘錄...
+    </div>
+  </div>
+
+  <div id="nav-bar">
+    <button class="nav-btn" onclick="prevSlide()" title="上一頁 (←)">‹</button>
+    <div class="page-indicator" id="page-indicator">1 / 8</div>
+    <button class="nav-btn" onclick="nextSlide()" title="下一頁 (→ / Space)">›</button>
+    <div style="width: 1px; height: 16px; background: #E2E8F0;"></div>
+    <button class="nav-btn" onclick="toggleNotes()" title="講者備忘錄 (P)">📝 講稿</button>
+    <button class="nav-btn" onclick="toggleFullscreen()" title="全螢幕演示 (F)">⛶ 全螢幕</button>
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 8;
+    const slides = document.querySelectorAll('.slide');
+    const progressBar = document.getElementById('progress-bar');
+    const pageIndicator = document.getElementById('page-indicator');
+    const speakerPanel = document.getElementById('speaker-notes-panel');
+    const notesBody = document.getElementById('notes-body');
+    const notesSlideId = document.getElementById('notes-slide-id');
+
+    function updateSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      slides.forEach(s => {
+        const slideNum = parseInt(s.getAttribute('data-slide'));
+        if (slideNum === currentSlide) {
+          s.classList.add('active');
+          const notesText = s.querySelector('.speaker-notes-content').innerHTML;
+          notesBody.innerHTML = notesText;
+          notesSlideId.textContent = `SLIDE ${currentSlide} / ${totalSlides}`;
+        } else {
+          s.classList.remove('active');
+        }
+      });
+
+      progressBar.style.width = (currentSlide / totalSlides * 100) + '%';
+      pageIndicator.textContent = `${currentSlide} / ${totalSlides}`;
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) updateSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) updateSlide(currentSlide - 1);
+    }
+
+    function toggleNotes() {
+      speakerPanel.classList.toggle('active');
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'Backspace') {
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      } else if (e.key === 'p' || e.key === 'P') {
+        toggleNotes();
+      } else if (e.key === 'Home') {
+        updateSlide(1);
+      } else if (e.key === 'End') {
+        updateSlide(totalSlides);
+      }
+    });
+
+    updateSlide(1);
+  </script>
+</body>
+</html>
